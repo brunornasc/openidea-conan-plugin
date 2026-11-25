@@ -16,6 +16,8 @@ use serde_json::{Value, json};
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
+mod i18n;
+
 pub const VIEW: &str = "conan";
 const PAGE: &str = include_str!("page.html");
 const CENTER: &str = "https://center2.conan.io/v2/conans/search";
@@ -702,14 +704,33 @@ fn rewrite_target_link_libraries(
     if tokens.is_empty() {
         return Ok(None);
     }
-    let kept: Vec<String> = std::iter::once(tokens[0].clone())
-        .chain(
-            tokens[1..]
-                .iter()
-                .filter(|token| !link_token_removed(token, prefixes))
-                .cloned(),
-        )
-        .collect();
+    let mut kept: Vec<String> = vec![tokens[0].clone()];
+    let mut idx = 1usize;
+    while idx < tokens.len() {
+        let token = &tokens[idx];
+        if build_type_keyword(token) {
+            let Some(lib) = tokens.get(idx + 1) else {
+                return Err(
+                    "unsupported CMake layout: dangling build-type selector in target_link_libraries".into(),
+                );
+            };
+            if build_type_keyword(lib) || scope_keyword(lib) {
+                return Err(
+                    "unsupported CMake layout: malformed build-type selector in target_link_libraries".into(),
+                );
+            }
+            if !link_token_removed(lib, prefixes) {
+                kept.push(token.clone());
+                kept.push(lib.clone());
+            }
+            idx += 2;
+        } else if !link_token_removed(token, prefixes) {
+            kept.push(token.clone());
+            idx += 1;
+        } else {
+            idx += 1;
+        }
+    }
     if kept.len() <= 1 || kept[1..].iter().all(|token| keyword(token)) {
         return Ok(None);
     }
@@ -784,6 +805,10 @@ fn format_multiline_command(indent: &str, name: &str, tokens: &[String]) -> Stri
 }
 
 fn keyword(token: &str) -> bool {
+    scope_keyword(token) || build_type_keyword(token)
+}
+
+fn scope_keyword(token: &str) -> bool {
     matches!(
         token.to_ascii_uppercase().as_str(),
         "PRIVATE"
@@ -792,9 +817,13 @@ fn keyword(token: &str) -> bool {
             | "LINK_PRIVATE"
             | "LINK_PUBLIC"
             | "LINK_INTERFACE_LIBRARIES"
-            | "DEBUG"
-            | "OPTIMIZED"
-            | "GENERAL"
+    )
+}
+
+fn build_type_keyword(token: &str) -> bool {
+    matches!(
+        token.to_ascii_uppercase().as_str(),
+        "DEBUG" | "OPTIMIZED" | "GENERAL"
     )
 }
 
@@ -966,8 +995,12 @@ fn read_center(query: &str) -> Result<Vec<Recipe>, String> {
 
 fn read_details(name: &str) -> Result<Details, String> {
     let value = get_json(&format!("{DETAILS}{}", encode(name)))?;
-    parse_details(name, &value)
-        .ok_or_else(|| format!("Conan Center describes no recipe named {name}"))
+    parse_details(name, &value).ok_or_else(|| {
+        i18n::tf(
+            "Conan Center describes no recipe named {name}",
+            &[("name", name)],
+        )
+    })
 }
 
 fn parse_details(name: &str, value: &Value) -> Option<Details> {
@@ -1088,7 +1121,7 @@ fn run_step(task: &Task, cmd: &Command, spawn: &Spawn) -> Result<Ran, Error> {
                 cut -= 1;
             }
             output.truncate(cut);
-            output.push_str("\n… (output truncated)");
+            output.push_str(&i18n::t("\n… (output truncated)"));
         }
         task.report(0, None, Some(&command));
         if task.is_cancelled() {
@@ -1224,10 +1257,13 @@ fn apply_change(
 ) -> Outcome {
     let title = match change {
         Change::Install => match version {
-            Some(version) => format!("Install {name}/{version}"),
-            None => format!("Install {name}"),
+            Some(version) => i18n::tf(
+                "Install {name}/{version}",
+                &[("name", name), ("version", version)],
+            ),
+            None => i18n::tf("Install {name}", &[("name", name)]),
         },
-        Change::Remove => format!("Remove {name}"),
+        Change::Remove => i18n::tf("Remove {name}", &[("name", name)]),
     };
     match try_change(project, task, spawn, change, name, version, &title) {
         Ok(outcome) => outcome,
@@ -1253,9 +1289,9 @@ fn try_change(
     let has_txt = project.exists(CONANFILE).map_err(error)?;
     let has_py = project.exists(CONANFILE_PY).map_err(error)?;
     if has_py {
-        return Err(
-            "the project has a conanfile.py; edit it by hand, this plugin only changes conanfile.txt".to_owned()
-        );
+        return Err(i18n::t(
+            "the project has a conanfile.py; edit it by hand, this plugin only changes conanfile.txt",
+        ));
     }
     let before = if has_txt {
         project.read_file(CONANFILE).map_err(error)?
@@ -1277,9 +1313,13 @@ fn try_change(
     let mut requires = read_requires(&before);
     let needed = match change {
         Change::Install => {
-            let version = version.ok_or_else(|| format!("choose a version of {name}"))?;
+            let version =
+                version.ok_or_else(|| i18n::tf("choose a version of {name}", &[("name", name)]))?;
             if split_ref(&format!("{name}/{version}")).is_none() {
-                return Err(format!("{name}/{version} is not a valid Conan reference"));
+                return Err(i18n::tf(
+                    "{name}/{version} is not a valid Conan reference",
+                    &[("name", name), ("version", version)],
+                ));
             }
             requires.retain(|known| {
                 split_ref(known).is_none_or(|(other, _)| !other.eq_ignore_ascii_case(name))
@@ -1292,7 +1332,10 @@ fn try_change(
                 split_ref(known).is_none_or(|(other, _)| !other.eq_ignore_ascii_case(name))
             });
             if requires.len() == read_requires(&before).len() {
-                return Err(format!("the project does not ask for {name}"));
+                return Err(i18n::tf(
+                    "the project does not ask for {name}",
+                    &[("name", name)],
+                ));
             }
             requires.clone()
         }
@@ -1307,7 +1350,7 @@ fn try_change(
             ok: false,
             title: title.to_owned(),
             output: installed.output,
-            problem: Some("conan install failed; its output says why".into()),
+            problem: Some(i18n::t("conan install failed; its output says why")),
         });
     }
     let (mut find, link) = cmake_lines(&installed.output);
@@ -1344,9 +1387,8 @@ fn try_change(
             ok: configured.ok,
             title: title.to_owned(),
             output,
-            problem: (!configured.ok).then(|| {
-                "installed, but the CMake configure failed; its output says why".to_owned()
-            }),
+            problem: (!configured.ok)
+                .then(|| i18n::t("installed, but the CMake configure failed; its output says why")),
         });
     }
     Ok(Outcome {
@@ -1365,7 +1407,7 @@ fn limit_log(text: &str) -> String {
     while !text.is_char_boundary(cut) {
         cut -= 1;
     }
-    format!("{}\n… (output truncated)", &text[..cut])
+    i18n::tf("{text}\n… (output truncated)", &[("text", &text[..cut])])
 }
 
 fn search_message(project: Option<&Project>, seq: u64, query: &str) -> Value {
@@ -1376,7 +1418,7 @@ fn search_message(project: Option<&Project>, seq: u64, query: &str) -> Value {
             "query": query,
             "recipes": [],
             "total": 0,
-            "error": "open a folder first",
+            "error": i18n::t("open a folder first"),
         });
     };
     let installed = installed(project);
@@ -1454,7 +1496,7 @@ impl Plugin for Conan {
                 host::reveal_view(VIEW)?;
                 Ok(None)
             }
-            _ => Err(Error::NotFound(format!("command {id}"))),
+            _ => Err(Error::NotFound(i18n::tf("command {id}", &[("id", id)]))),
         }
     }
 }
@@ -1491,9 +1533,22 @@ impl Views for Conan {
                         "cmakeLists": project.exists(CMAKE_LISTS).unwrap_or(false),
                     },
                     "installed": installed,
+                    "i18n": if i18n::portuguese() {
+                        serde_json::from_str::<Value>(i18n::catalog_json()).unwrap_or_else(|_| json!({}))
+                    } else {
+                        json!({})
+                    },
                 })
             }
-            None => json!({ "project": null, "installed": [] }),
+            None => json!({
+                "project": null,
+                "installed": [],
+                "i18n": if i18n::portuguese() {
+                    serde_json::from_str::<Value>(i18n::catalog_json()).unwrap_or_else(|_| json!({}))
+                } else {
+                    json!({})
+                },
+            }),
         }
         .to_string()
         .replace('<', "\\u003c");
@@ -1564,16 +1619,20 @@ impl Views for Conan {
                         "name": name,
                         "title": "Conan",
                         "output": "",
-                        "problem": "open a folder first",
+                        "problem": i18n::t("open a folder first"),
                     }));
                 };
                 let title = match (change, &version) {
-                    (Change::Install, Some(version)) => format!("Install {name}/{version}"),
-                    (Change::Install, None) => format!("Install {name}"),
-                    (Change::Remove, _) => format!("Remove {name}"),
+                    (Change::Install, Some(version)) => i18n::tf(
+                        "Install {name}/{version}",
+                        &[("name", &name), ("version", version)],
+                    ),
+                    (Change::Install, None) => i18n::tf("Install {name}", &[("name", &name)]),
+                    (Change::Remove, _) => i18n::tf("Remove {name}", &[("name", &name)]),
                 };
                 post(&json!({ "op": "busy", "busy": true, "title": title }))?;
-                let task = host::begin_task(&format!("Conan: {title}"), true);
+                let task =
+                    host::begin_task(&i18n::tf("Conan: {title}", &[("title", &title)]), true);
                 let outcome = apply_change(
                     &project,
                     &task,
@@ -1826,6 +1885,64 @@ target_link_libraries(app\n\
     }
 
     #[test]
+    fn removing_a_library_keeps_its_build_type_selector_with_it() {
+        let lists = "add_executable(app main.cpp)\n\
+target_link_libraries(app INTERFACE debug fmt::fmt ZLIB::ZLIB)\n";
+        let without = without_packages(lists, &["fmt".to_owned()]).unwrap();
+        assert_eq!(
+            without,
+            "add_executable(app main.cpp)\n\
+target_link_libraries(app INTERFACE ZLIB::ZLIB)\n"
+        );
+    }
+
+    #[test]
+    fn removing_through_apply_change_keeps_build_type_selector_with_removed_library() {
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "project.write",
+            "process:conan",
+            "process:cmake",
+        ]);
+        host.add_file(
+            "conanfile.txt",
+            "[requires]\nfmt/11.0.2\nzlib/1.3.1\n\n[generators]\nCMakeDeps\nCMakeToolchain\n",
+        );
+        host.add_file(
+            "CMakeLists.txt",
+            "add_executable(app main.cpp)\n\
+target_link_libraries(app INTERFACE debug fmt::fmt ZLIB::ZLIB)\n",
+        );
+        let spawn = move |cmd: &Command| -> Result<Box<dyn Spawned>, Error> {
+            match cmd.program.as_str() {
+                "conan" => {
+                    let before = cmd.args.contains(&"--build=never".to_string());
+                    let output = if before {
+                        FMT_AND_ZLIB
+                    } else {
+                        "CMakeDeps necessary find_package() and targets for your CMakeLists.txt\n    find_package(ZLIB)\n    target_link_libraries(... ZLIB::ZLIB)\n"
+                    };
+                    Ok(Box::new(FakeChild::done(output)))
+                }
+                "cmake" => Ok(Box::new(FakeChild::done(""))),
+                other => panic!("unexpected program {other}"),
+            }
+        };
+        let project = invocation(&host).project().expect("project");
+        let task = host::begin_task("test", true);
+        let outcome = apply_change(&project, &task, &spawn, Change::Remove, "fmt", None);
+        assert!(outcome.ok, "{:?}", outcome.problem);
+        let lists = project.read_file("CMakeLists.txt").unwrap();
+        assert!(!lists.contains("debug fmt::fmt"), "{lists}");
+        assert!(!lists.contains("debug ZLIB::ZLIB"), "{lists}");
+        assert!(lists.contains("ZLIB::ZLIB"), "{lists}");
+        assert!(
+            lists.contains("target_link_libraries(app INTERFACE ZLIB::ZLIB)"),
+            "{lists}"
+        );
+    }
+
+    #[test]
     fn unsupported_cmake_layout_is_rejected_before_writing() {
         let lists = "add_executable(app main.cpp)\n\
 target_link_libraries(app\n\
@@ -1833,9 +1950,6 @@ target_link_libraries(app\n\
   fmt::fmt\n\
   $<IF:$<CONFIG:Debug>,ZLIB::ZLIBDEBUG,ZLIB::ZLIB>\n\
 )\n";
-        let err = without_packages(lists, &["fmt".to_owned()]).unwrap_err();
-        assert!(err.contains("unsupported CMake layout"), "{err}");
-
         let host = MockHost::install().with_capabilities(&[
             "project.read",
             "project.write",
@@ -1847,6 +1961,9 @@ target_link_libraries(app\n\
             "[requires]\nfmt/11.0.2\nzlib/1.3.1\n\n[generators]\nCMakeDeps\nCMakeToolchain\n",
         );
         host.add_file("CMakeLists.txt", lists);
+        let err = without_packages(lists, &["fmt".to_owned()]).unwrap_err();
+        assert!(err.contains("unsupported CMake layout"), "{err}");
+
         let spawn = move |cmd: &Command| -> Result<Box<dyn Spawned>, Error> {
             match cmd.program.as_str() {
                 "conan" => Ok(Box::new(FakeChild::done(FMT_AND_ZLIB))),
@@ -2366,5 +2483,35 @@ target_link_libraries(app\n\
             "{page}"
         );
         assert!(!page.contains("__START__"));
+    }
+
+    #[test]
+    fn the_page_ships_the_catalog_when_the_ide_is_portuguese() {
+        let host = MockHost::install();
+        host.set_locale("pt-BR");
+        let mut conan = Conan::default();
+        let View {
+            body: Body::Html(page),
+            ..
+        } = conan.render(VIEW, None, &invocation(&host)).unwrap()
+        else {
+            panic!("an html body");
+        };
+        assert!(page.contains(r#""Refresh":"Atualizar""#), "{page}");
+        assert!(page.contains("data-i18n"), "{page}");
+    }
+
+    #[test]
+    fn the_page_has_no_catalog_in_english() {
+        let host = MockHost::install();
+        let mut conan = Conan::default();
+        let View {
+            body: Body::Html(page),
+            ..
+        } = conan.render(VIEW, None, &invocation(&host)).unwrap()
+        else {
+            panic!("an html body");
+        };
+        assert!(page.contains(r#""i18n":{}"#), "{page}");
     }
 }
