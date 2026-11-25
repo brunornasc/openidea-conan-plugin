@@ -44,6 +44,14 @@ The page is HTML (`Body::Html`) talking to the plugin with
 `openidea.postMessage`/`onMessage`; there is no web build. Settings are the
 project's own except that the plugin never writes `conanfile.py`.
 
+## Language
+
+The plugin's text is in English by default and follows the IDE's language when
+the IDE is set to Portuguese (Brazil). A **Plugin language** setting can pin it
+to `auto`, `en-US` or `pt-BR`. The translation lives in `locales/pt-BR.json`: the
+IDE translates the manifest and view text, while the plugin uses the same
+catalog for the text it builds itself (errors, notifications and the HTML page).
+
 ## Capabilities
 
 `project.read`, `project.write`, `net:center2.conan.io`,

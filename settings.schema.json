@@ -1,0 +1,10 @@
+{
+  "properties": {
+    "language": {
+      "type": "string",
+      "title": "Plugin language",
+      "enum": ["auto", "en-US", "pt-BR"],
+      "default": "auto"
+    }
+  }
+}

@@ -223,23 +223,25 @@
       spellcheck="false"
       autocomplete="off"
       aria-label="Search Conan Center recipes"
+      data-i18n-ph="Search Conan Center recipes…"
+      data-i18n-aria="Search Conan Center recipes"
     />
-    <button id="refresh" type="button" title="Search again">Refresh</button>
+    <button id="refresh" type="button" title="Search again" data-i18n="Refresh" data-i18n-title="Search again">Refresh</button>
   </div>
   <div class="main">
-    <section class="left" aria-label="Recipes">
+    <section class="left" aria-label="Recipes" data-i18n-aria="Recipes">
       <div id="status" class="status" role="status" aria-live="polite"></div>
       <div id="list" class="list"></div>
     </section>
     <section class="right">
       <div id="detail" class="detail">
-        <p class="empty">Search Conan Center or pick a package from the project.</p>
+        <p class="empty" data-i18n>Search Conan Center or pick a package from the project.</p>
       </div>
       <div id="logwrap" class="logwrap" hidden>
         <div class="row">
-          <span class="caption">Output</span>
+          <span class="caption" data-i18n>Output</span>
           <span id="logtitle" class="logtitle"></span>
-          <button id="clear" class="small" type="button">Clear</button>
+          <button id="clear" class="small" type="button" data-i18n>Clear</button>
         </div>
         <pre id="log" class="log" tabindex="0"></pre>
       </div>
@@ -261,6 +263,40 @@
       refresh = $("refresh"),
       clear = $("clear");
     const startup = typeof START === "object" && START ? START : {};
+    const catalog = startup.i18n || {};
+    const T = (text) =>
+      (Object.prototype.hasOwnProperty.call(catalog, text) && catalog[text]) || text;
+    const TF = (text, values) => {
+      let out = T(text);
+      for (const [key, value] of Object.entries(values)) {
+        out = out.split(`{${key}}`).join(String(value));
+      }
+      return out;
+    };
+    function applyI18n() {
+      document.querySelectorAll("[data-i18n]").forEach((el) => {
+        const en = el.dataset.i18n || el.textContent.trim();
+        el.dataset.i18n = en;
+        el.textContent = T(en);
+      });
+      document.querySelectorAll("[data-i18n-ph]").forEach((el) => {
+        const en = el.dataset.i18nPh || el.placeholder;
+        el.dataset.i18nPh = en;
+        el.placeholder = T(en);
+      });
+      document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+        const en = el.dataset.i18nAria || el.getAttribute("aria-label");
+        el.dataset.i18nAria = en;
+        el.setAttribute("aria-label", T(en));
+      });
+      document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+        const en = el.dataset.i18nTitle || el.title;
+        el.dataset.i18nTitle = en;
+        el.title = T(en);
+      });
+      document.documentElement.lang = Object.keys(catalog).length ? "pt-BR" : "en";
+    }
+    applyI18n();
     const project = startup.project || null;
     let installed = new Map(
       (startup.installed || []).map((entry) => [String(entry.name).toLowerCase(), String(entry.version)]),
@@ -304,8 +340,10 @@
       lastQuery = text;
       seq += 1;
       post({ op: "search", seq, query: text });
-      if (text) status.textContent = "Searching Conan Center…";
-      else status.textContent = project ? `Reading ${project.recipe || "the project"}…` : "Open a folder first.";
+      if (text) status.textContent = T("Searching Conan Center…");
+      else status.textContent = project
+        ? TF("Reading {name}…", { name: project.recipe || T("the project") })
+        : T("Open a folder first.");
       status.classList.remove("error");
     }
 
@@ -335,12 +373,23 @@
       }
       const total = typeof message.total === "number" ? message.total : recipes.length;
       if (lastQuery) {
-        const suffix = total > recipes.length ? ` (first ${recipes.length} of ${total})` : "";
-        status.textContent = `${total} recipe${total === 1 ? "" : "s"}${suffix}`;
+        const suffix =
+          total > recipes.length
+            ? TF(" (first {shown} of {total})", { shown: recipes.length, total })
+            : "";
+        status.textContent =
+          TF(total === 1 ? "{count} recipe" : "{count} recipes", { count: total }) + suffix;
       } else if (recipes.length) {
-        status.textContent = `${project ? project.name + ": " : ""}${recipes.length} package${recipes.length === 1 ? "" : "s"} in ${project && project.recipe ? project.recipe : "conanfile.txt"}`;
+        status.textContent =
+          (project ? project.name + ": " : "") +
+          TF(recipes.length === 1 ? "{count} package" : "{count} packages", {
+            count: recipes.length,
+          }) +
+          " " +
+          TF("in {file}", { file: project && project.recipe ? project.recipe : "conanfile.txt" });
       } else {
-        status.textContent = `${project ? project.name + ": " : ""}no packages yet — search Conan Center to add one`;
+        status.textContent =
+          (project ? project.name + ": " : "") + T("no packages yet — search Conan Center to add one");
       }
       status.classList.remove("error");
       drawList();
@@ -356,7 +405,7 @@
 
     function drawList() {
       if (!recipes.length) {
-        const text = lastQuery ? "No recipes match." : "No packages in the project.";
+        const text = lastQuery ? T("No recipes match.") : T("No packages in the project.");
         list.innerHTML = `<div class="empty" style="padding: 8px">${esc(text)}</div>`;
         return;
       }
@@ -366,8 +415,15 @@
           const latest = entry.versions && entry.versions.length ? entry.versions[0] : "";
           return `<button type="button" class="item${same(entry.name, selected) ? " current" : ""}" data-name="${esc(entry.name)}">
             <span class="name">${esc(entry.name)}</span>
-            <span class="meta">${entry.versions ? entry.versions.length : 0} version${entry.versions && entry.versions.length === 1 ? "" : "s"} · latest ${esc(latest)}${
-              current ? ` · <span class="badge on">installed ${esc(current)}</span>` : ""
+            <span class="meta">${TF(
+              entry.versions && entry.versions.length === 1
+                ? "{count} version"
+                : "{count} versions",
+              { count: entry.versions ? entry.versions.length : 0 },
+            )} · ${TF("latest {version}", { version: esc(latest) })}${
+              current
+                ? ` · <span class="badge on">${TF("installed {version}", { version: esc(current) })}</span>`
+                : ""
             }</span>
           </button>`;
         })
@@ -388,21 +444,23 @@
     }
 
     function buttonLabel(current, version) {
-      if (!current) return `Install ${version}`;
-      if (current === version) return `Reinstall ${version}`;
-      return `${isNewer(version, current) ? "Update to" : "Downgrade to"} ${version}`;
+      if (!current) return TF("Install {version}", { version });
+      if (current === version) return TF("Reinstall {version}", { version });
+      return TF(isNewer(version, current) ? "Update to {version}" : "Downgrade to {version}", {
+        version,
+      });
     }
 
     function drawDetail() {
       if (!selected) {
         detail.innerHTML = project
-          ? `<p class="empty">Pick a package from the list, or search Conan Center.</p>`
-          : `<p class="empty">Open a folder with a conanfile.txt or CMakeLists.txt first.</p>`;
+          ? `<p class="empty">${esc(T("Pick a package from the list, or search Conan Center."))}</p>`
+          : `<p class="empty">${esc(T("Open a folder with a conanfile.txt or CMakeLists.txt first."))}</p>`;
         return;
       }
       const entry = recipe(selected);
       if (!entry) {
-        detail.innerHTML = `<p class="empty">Pick a package from the list.</p>`;
+        detail.innerHTML = `<p class="empty">${esc(T("Pick a package from the list."))}</p>`;
         return;
       }
       const current = installed.get(String(entry.name).toLowerCase());
@@ -414,29 +472,32 @@
         .map(
           (candidate) =>
             `<option value="${esc(candidate)}"${candidate === version ? " selected" : ""}>${esc(candidate)}${
-              candidate === current ? " (installed)" : ""
-            }${candidate === latest ? " (latest)" : ""}</option>`,
+              candidate === current ? esc(T(" (installed)")) : ""
+            }${candidate === latest ? esc(T(" (latest)")) : ""}</option>`,
         )
         .join("");
       const tags = details ? [...(details.licenses || []), ...(details.labels || [])] : [];
       detail.innerHTML = `
         <div class="head">
           <h2>${esc(entry.name)}</h2>
-          <span class="badge${current ? " on" : ""}">${current ? `installed ${esc(current)}` : "not in conanfile.txt"}</span>
+          <span class="badge${current ? " on" : ""}">${
+            current ? TF("installed {version}", { version: esc(current) }) : esc(T("not in conanfile.txt"))
+          }</span>
         </div>
-        <p class="desc">${details ? esc(details.description || "Conan Center gives no description for this recipe.") : detailError ? esc(detailError) : "Reading Conan Center…"}</p>
+        <p class="desc">${details ? esc(details.description || T("Conan Center gives no description for this recipe.")) : detailError ? esc(detailError) : T("Reading Conan Center…")}</p>
         ${tags.length ? `<div class="tags">${tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}</div>` : ""}
         <div class="row" style="flex-wrap: wrap; margin-top: 8px">
-          <label class="caption" for="version">Version</label>
+          <label class="caption" for="version" data-i18n>Version</label>
           <select id="version" ${busy ? "disabled" : ""}>${options}</select>
           <button id="change" type="button" ${canChange && !busy ? "" : "disabled"}>${buttonLabel(current, version)}</button>
-          <button id="remove" type="button" class="danger" ${canChange && !busy && current ? "" : "disabled"}>Remove</button>
-          <button id="browse" type="button" class="small">Open on Conan Center</button>
-          ${details && details.homepage ? `<button id="homepage" type="button" class="small">Homepage</button>` : ""}
+          <button id="remove" type="button" class="danger" ${canChange && !busy && current ? "" : "disabled"} data-i18n>Remove</button>
+          <button id="browse" type="button" class="small" data-i18n>Open on Conan Center</button>
+          ${details && details.homepage ? `<button id="homepage" type="button" class="small" data-i18n>Homepage</button>` : ""}
         </div>
-        ${python ? `<p class="hint">This project has a conanfile.py: its packages are listed, but edits stay with you.</p>` : ""}
-        ${project && !project.cmakeLists ? `<p class="hint">No CMakeLists.txt: conan install runs, but there is no CMake target to link.</p>` : ""}
+        ${python ? `<p class="hint">${esc(T("This project has a conanfile.py: its packages are listed, but edits stay with you."))}</p>` : ""}
+        ${project && !project.cmakeLists ? `<p class="hint">${esc(T("No CMakeLists.txt: conan install runs, but there is no CMake target to link."))}</p>` : ""}
       `;
+      applyI18n();
       const versionField = $("version");
       if (versionField) {
         versionField.addEventListener("change", () => {
@@ -461,7 +522,9 @@
       const versionField = $("version");
       const version = versionField ? versionField.value : null;
       setBusy(true);
-      status.textContent = remove ? `Removing ${selected}…` : `Installing ${selected}/${version}…`;
+      status.textContent = remove
+        ? TF("Removing {name}…", { name: selected })
+        : TF("Installing {name}/{version}…", { name: selected, version });
       status.classList.remove("error");
       post(remove ? { op: "remove", name: selected } : { op: "install", name: selected, version });
     }
@@ -470,11 +533,11 @@
       logwrap.hidden = false;
       logtitle.textContent = message.title || "";
       const problem = message.problem ? `${message.problem}\n\n` : "";
-      log.textContent = `${message.ok ? "" : "Failed: "}${problem}${message.output || ""}`.trim();
+      log.textContent = `${message.ok ? "" : T("Failed: ")}${problem}${message.output || ""}`.trim();
       log.scrollTop = log.scrollHeight;
       setBusy(false);
       if (!message.ok) {
-        status.textContent = message.problem || "The change failed.";
+        status.textContent = message.problem || T("The change failed.");
         status.classList.add("error");
       }
       search(lastQuery);
@@ -530,7 +593,7 @@
     });
 
     if (!project) {
-      status.textContent = "Open a folder first.";
+      status.textContent = T("Open a folder first.");
       status.classList.add("error");
       query.disabled = true;
       refresh.disabled = true;

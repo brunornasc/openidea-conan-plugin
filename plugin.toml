@@ -36,3 +36,6 @@ category = "Conan"
 [[contributes.menus]]
 menu = "tools"
 command = "open"
+
+[contributes.settings]
+schema = "settings.schema.json"
