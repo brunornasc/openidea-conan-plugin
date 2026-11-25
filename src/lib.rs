@@ -30,8 +30,13 @@ const MAX_RECIPES: usize = 200;
 /// Longest Conan/CMake output sent back (bytes).
 const MAX_LOG: usize = 60_000;
 /// Build folders CMake projects in the IDE use, in the order looked for.
-const BUILD_DIRS: [&str; 5] =
-    ["build", "cmake-build-debug", "cmake-build-release", "cmake-build-relwithdebinfo", "out/build"];
+const BUILD_DIRS: [&str; 5] = [
+    "build",
+    "cmake-build-debug",
+    "cmake-build-release",
+    "cmake-build-relwithdebinfo",
+    "out/build",
+];
 /// CMakeDeps only writes data for the build types it installed: both are needed
 /// so a Debug configure finds the same recipes and can be debugged with GDB.
 const BUILD_TYPES: [&str; 2] = ["Release", "Debug"];
@@ -95,7 +100,10 @@ pub fn split_ref(reference: &str) -> Option<(String, String)> {
     }
     let (name, version) = rest.split_once('/')?;
     let valid = |word: &str| {
-        !word.is_empty() && word.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-'))
+        !word.is_empty()
+            && word
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-'))
     };
     (valid(name) && valid(version)).then(|| (name.to_owned(), version.to_owned()))
 }
@@ -115,9 +123,17 @@ pub fn recipes_from_json(value: &Value) -> Vec<Recipe> {
 pub fn recipes_from_refs(refs: impl IntoIterator<Item = String>) -> Vec<Recipe> {
     let mut by_name: BTreeMap<String, (String, Vec<String>)> = BTreeMap::new();
     for reference in refs {
-        let Some((name, version)) = split_ref(&reference) else { continue };
-        let entry = by_name.entry(name.to_ascii_lowercase()).or_insert_with(|| (name.clone(), Vec::new()));
-        if !entry.1.iter().any(|known| known.eq_ignore_ascii_case(&version)) {
+        let Some((name, version)) = split_ref(&reference) else {
+            continue;
+        };
+        let entry = by_name
+            .entry(name.to_ascii_lowercase())
+            .or_insert_with(|| (name.clone(), Vec::new()));
+        if !entry
+            .1
+            .iter()
+            .any(|known| known.eq_ignore_ascii_case(&version))
+        {
             entry.1.push(version);
         }
     }
@@ -143,12 +159,17 @@ pub fn natural_cmp(a: &str, b: &str) -> Ordering {
                 let order = if a_digit && b_digit {
                     let a_number = a_chunk.trim_start_matches('0');
                     let b_number = b_chunk.trim_start_matches('0');
-                    a_number.len().cmp(&b_number.len()).then_with(|| a_number.cmp(b_number))
+                    a_number
+                        .len()
+                        .cmp(&b_number.len())
+                        .then_with(|| a_number.cmp(b_number))
                 } else if a_digit != b_digit {
                     // A version with a suffix ("1.0.0-rc1") is older than the release.
                     b_digit.cmp(&a_digit)
                 } else {
-                    a_chunk.to_ascii_lowercase().cmp(&b_chunk.to_ascii_lowercase())
+                    a_chunk
+                        .to_ascii_lowercase()
+                        .cmp(&b_chunk.to_ascii_lowercase())
                 };
                 if order != Ordering::Equal {
                     return order;
@@ -178,7 +199,10 @@ impl<'a> Iterator for Chunks<'a> {
         }
         let rest = &self.text[self.at..];
         let digit = rest.as_bytes()[0].is_ascii_digit();
-        let end = rest.char_indices().find(|(_, c)| c.is_ascii_digit() != digit).map_or(rest.len(), |(i, _)| i);
+        let end = rest
+            .char_indices()
+            .find(|(_, c)| c.is_ascii_digit() != digit)
+            .map_or(rest.len(), |(i, _)| i);
         let chunk = &rest[..end];
         self.at += end;
         Some((digit, chunk))
@@ -204,7 +228,9 @@ pub fn with_requires(text: &str, requires: &[String]) -> String {
             }
             continue;
         }
-        if section == "settings" || (section == "requires" && !words.is_empty() && !words.starts_with('#')) {
+        if section == "settings"
+            || (section == "requires" && !words.is_empty() && !words.starts_with('#'))
+        {
             continue;
         }
         kept.push(line.to_owned());
@@ -216,7 +242,12 @@ pub fn with_requires(text: &str, requires: &[String]) -> String {
             1
         }
     };
-    for (i, requirement) in requires.iter().map(|r| r.trim()).filter(|r| !r.is_empty()).enumerate() {
+    for (i, requirement) in requires
+        .iter()
+        .map(|r| r.trim())
+        .filter(|r| !r.is_empty())
+        .enumerate()
+    {
         kept.insert(insert_at + i, requirement.to_owned());
     }
     ensure_generators(&kept.join("\n"))
@@ -245,7 +276,11 @@ fn ensure_generators(text: &str) -> String {
     }
     let missing: Vec<&str> = ["CMakeDeps", "CMakeToolchain"]
         .into_iter()
-        .filter(|generator| !present.iter().any(|known| known == &generator.to_ascii_lowercase()))
+        .filter(|generator| {
+            !present
+                .iter()
+                .any(|known| known == &generator.to_ascii_lowercase())
+        })
         .collect();
     if missing.is_empty() {
         return lines.join("\n");
@@ -330,21 +365,40 @@ pub fn with_packages(text: &str, find_packages: &[String], link_targets: &[Strin
     let target = executable_name(&lines);
     let find: Vec<String> = dedup_ci(find_packages)
         .into_iter()
-        .filter(|package| !lines.iter().any(|line| find_package_name(line) == Some(package.as_str())))
+        .filter(|package| {
+            !lines
+                .iter()
+                .any(|line| find_package_name(line) == Some(package.as_str()))
+        })
         .collect();
     if !find.is_empty() {
-        let at = lines.iter().position(|line| executable_of(line).is_some()).unwrap_or(lines.len());
-        let added: Vec<String> = find.iter().map(|package| format!("find_package({package} REQUIRED)")).collect();
+        let at = lines
+            .iter()
+            .position(|line| executable_of(line).is_some())
+            .unwrap_or(lines.len());
+        let added: Vec<String> = find
+            .iter()
+            .map(|package| format!("find_package({package} REQUIRED)"))
+            .collect();
         lines.splice(at..at, added);
     }
     if let Some(target) = target {
-        let missing: Vec<&String> =
-            link_targets.iter().filter(|link| !lines.iter().any(|line| line.contains(link.as_str()))).collect();
+        let missing: Vec<&String> = link_targets
+            .iter()
+            .filter(|link| !lines.iter().any(|line| line.contains(link.as_str())))
+            .collect();
         if !missing.is_empty() {
             let at = lines.iter().position(|line| {
-                line.to_ascii_lowercase().contains(&format!("target_link_libraries({}", target.to_ascii_lowercase()))
+                line.to_ascii_lowercase().contains(&format!(
+                    "target_link_libraries({}",
+                    target.to_ascii_lowercase()
+                ))
             });
-            let added = missing.iter().map(|link| link.as_str()).collect::<Vec<_>>().join(" ");
+            let added = missing
+                .iter()
+                .map(|link| link.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
             match at {
                 Some(i) => match lines[i].rfind(')') {
                     Some(close) => lines[i].insert_str(close, &format!(" {added}")),
@@ -357,7 +411,10 @@ pub fn with_packages(text: &str, find_packages: &[String], link_targets: &[Strin
                     let all = dedup_ci(link_targets).join(" ");
                     let line = format!("target_link_libraries({target} PRIVATE {all})");
                     // Before the empty lines a trailing newline leaves, so the file keeps one.
-                    let at = lines.iter().rposition(|line| !line.trim().is_empty()).map_or(0, |i| i + 1);
+                    let at = lines
+                        .iter()
+                        .rposition(|line| !line.trim().is_empty())
+                        .map_or(0, |i| i + 1);
                     lines.insert(at, line);
                 }
             }
@@ -366,71 +423,398 @@ pub fn with_packages(text: &str, find_packages: &[String], link_targets: &[Strin
     lines.join("\n")
 }
 
-/// A CMakeLists.txt without the `find_package()` lines of these packages and
-/// the `name::target` links they provide; a link line left with only keywords
-/// goes too.
-pub fn without_packages(text: &str, names: &[String]) -> String {
-    let prefixes: Vec<String> = names.iter().map(|name| format!("{}::", name.to_ascii_lowercase())).collect();
-    let mut kept: Vec<String> = Vec::new();
-    for line in text.split('\n') {
-        if find_package_name(line).is_some_and(|package| names.iter().any(|name| name.eq_ignore_ascii_case(package))) {
+/// A CMakeLists.txt without the `find_package()` commands of these packages
+/// and the `name::target` links they provide; a link command left with only
+/// keywords goes too. Edits complete command spans, so multiline commands are
+/// preserved or removed whole. Returns an error for unsupported layouts that
+/// cannot be edited safely.
+pub fn without_packages(text: &str, names: &[String]) -> Result<String, String> {
+    let prefixes: Vec<String> = names
+        .iter()
+        .map(|name| format!("{}::", name.to_ascii_lowercase()))
+        .collect();
+    let spans = cmake_command_spans(text)?;
+    let mut kept = String::with_capacity(text.len());
+    let mut i = 0usize;
+    while i < text.len() {
+        let Some((start, end)) = spans.iter().copied().find(|(s, _)| *s == i) else {
+            let ch = text[i..].chars().next().unwrap();
+            kept.push(ch);
+            i += ch.len_utf8();
+            continue;
+        };
+        let command = &text[start..end];
+        if let Some(package) = find_package_name(command)
+            && names.iter().any(|name| name.eq_ignore_ascii_case(package))
+        {
+            i = remove_command_span(&mut kept, text, end);
             continue;
         }
-        let trimmed = line.trim_start();
-        let links_libraries = trimmed.to_ascii_lowercase().starts_with("target_link_libraries(");
-        if links_libraries && let Some(open) = trimmed.find('(') {
-            let close = trimmed.rfind(')').unwrap_or(trimmed.len());
-            let inside = &trimmed[open + 1..close];
-            let rest = &trimmed[close..];
-            let tokens: Vec<&str> = inside.split_whitespace().collect();
-            if !tokens.is_empty() {
-                let links: Vec<&str> = tokens[1..]
-                    .iter()
-                    .copied()
-                    .filter(|token| {
-                        let lower = token.to_ascii_lowercase();
-                        !prefixes.iter().any(|prefix| lower.starts_with(prefix.as_str()))
-                    })
-                    .collect();
-                if links.is_empty() || links.iter().all(|token| keyword(token)) {
+        if is_target_link_libraries(command) {
+            match rewrite_target_link_libraries(command, &prefixes)? {
+                Some(rewritten) => kept.push_str(&rewritten),
+                None => {
+                    i = remove_command_span(&mut kept, text, end);
                     continue;
                 }
-                let start = &line[..line.len() - trimmed.len()];
-                let head = &trimmed[..=open];
-                let mut words = vec![tokens[0]];
-                words.extend(links);
-                kept.push(format!("{start}{head}{}{}", words.join(" "), rest));
+            }
+            i = end;
+            continue;
+        }
+        kept.push_str(command);
+        i = end;
+    }
+    Ok(kept)
+}
+
+fn remove_command_span(kept: &mut String, text: &str, end: usize) -> usize {
+    let line_start = kept.rfind('\n').map(|n| n + 1).unwrap_or(0);
+    if kept[line_start..].chars().all(|c| c == ' ' || c == '\t') {
+        kept.truncate(line_start);
+        let mut i = end;
+        if text.as_bytes().get(i) == Some(&b'\r') {
+            i += 1;
+        }
+        if text.as_bytes().get(i) == Some(&b'\n') {
+            i += 1;
+        }
+        i
+    } else {
+        end
+    }
+}
+
+fn cmake_command_spans(text: &str) -> Result<Vec<(usize, usize)>, String> {
+    let bytes = text.as_bytes();
+    let mut spans = Vec::new();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match bytes[i] {
+            b' ' | b'\t' | b'\r' | b'\n' => i += 1,
+            b'#' => {
+                if bytes.get(i + 1) == Some(&b'[')
+                    && let Some(eq) = bracket_equals(bytes, i + 1)
+                {
+                    i = skip_bracket(bytes, i + 1, eq);
+                    continue;
+                }
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'"' => {
+                i = skip_quoted(bytes, i)?;
+            }
+            b'[' => {
+                if let Some(eq) = bracket_equals(bytes, i) {
+                    i = skip_bracket(bytes, i, eq);
+                    continue;
+                }
+                i += 1;
+            }
+            b'(' => {
+                return Err("unsupported CMake layout: unexpected '(' outside a command".into());
+            }
+            b')' => {
+                return Err("unsupported CMake layout: unexpected ')' outside a command".into());
+            }
+            _ if is_cmake_name_start(bytes[i]) => {
+                let start = i;
+                i += 1;
+                while i < bytes.len() && is_cmake_name_char(bytes[i]) {
+                    i += 1;
+                }
+                i = skip_cmake_space(bytes, i);
+                if i >= bytes.len() || bytes[i] != b'(' {
+                    // Not a command invocation; keep scanning.
+                    i = start + 1;
+                    continue;
+                }
+                let end = skip_command(bytes, i)?;
+                spans.push((start, end));
+                i = end;
+            }
+            _ => i += 1,
+        }
+    }
+    Ok(spans)
+}
+
+fn skip_command(bytes: &[u8], mut i: usize) -> Result<usize, String> {
+    let mut depth = 0i32;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'(' => {
+                depth += 1;
+                i += 1;
+            }
+            b')' => {
+                depth -= 1;
+                i += 1;
+                if depth == 0 {
+                    return Ok(i);
+                }
+                if depth < 0 {
+                    return Err("unsupported CMake layout: unbalanced ')'".into());
+                }
+            }
+            b'#' => {
+                if bytes.get(i + 1) == Some(&b'[')
+                    && let Some(eq) = bracket_equals(bytes, i + 1)
+                {
+                    i = skip_bracket(bytes, i + 1, eq);
+                    continue;
+                }
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+            }
+            b'"' => i = skip_quoted(bytes, i)?,
+            b'[' => {
+                if let Some(eq) = bracket_equals(bytes, i) {
+                    i = skip_bracket(bytes, i, eq);
+                } else {
+                    i += 1;
+                }
+            }
+            b'\\' => i = (i + 2).min(bytes.len()),
+            _ => i += 1,
+        }
+    }
+    Err("unsupported CMake layout: unterminated command".into())
+}
+
+fn skip_cmake_space(bytes: &[u8], mut i: usize) -> usize {
+    loop {
+        let before = i;
+        while i < bytes.len() && matches!(bytes[i], b' ' | b'\t' | b'\r' | b'\n') {
+            i += 1;
+        }
+        if i < bytes.len() && bytes[i] == b'#' {
+            if bytes.get(i + 1) == Some(&b'[')
+                && let Some(eq) = bracket_equals(bytes, i + 1)
+            {
+                i = skip_bracket(bytes, i + 1, eq);
                 continue;
             }
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
         }
-        kept.push(line.to_owned());
+        if i == before {
+            return i;
+        }
     }
-    kept.join("\n")
+}
+
+fn skip_quoted(bytes: &[u8], mut i: usize) -> Result<usize, String> {
+    i += 1; // opening quote
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i = (i + 2).min(bytes.len()),
+            b'"' => return Ok(i + 1),
+            _ => i += 1,
+        }
+    }
+    Err("unsupported CMake layout: unterminated quoted string".into())
+}
+
+fn bracket_equals(bytes: &[u8], open: usize) -> Option<usize> {
+    if bytes.get(open) != Some(&b'[') {
+        return None;
+    }
+    let mut i = open + 1;
+    let mut eq = 0usize;
+    while bytes.get(i) == Some(&b'=') {
+        eq += 1;
+        i += 1;
+    }
+    (bytes.get(i) == Some(&b'[')).then_some(eq)
+}
+
+fn skip_bracket(bytes: &[u8], open: usize, eq: usize) -> usize {
+    let mut i = open + 2 + eq;
+    while i < bytes.len() {
+        if bytes[i] == b']' {
+            let mut j = i + 1;
+            let mut seen = 0usize;
+            while seen < eq && bytes.get(j) == Some(&b'=') {
+                seen += 1;
+                j += 1;
+            }
+            if seen == eq && bytes.get(j) == Some(&b']') {
+                return j + 1;
+            }
+        }
+        i += 1;
+    }
+    bytes.len()
+}
+
+fn is_cmake_name_start(b: u8) -> bool {
+    b.is_ascii_alphabetic() || b == b'_'
+}
+
+fn is_cmake_name_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.' | b'+')
+}
+
+fn is_target_link_libraries(command: &str) -> bool {
+    command_name(command).is_some_and(|name| name.eq_ignore_ascii_case("target_link_libraries"))
+}
+
+fn command_name(command: &str) -> Option<&str> {
+    let trimmed = command.trim_start();
+    let name_len = trimmed
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '+'))
+        .count();
+    if name_len == 0 {
+        return None;
+    }
+    let name = &trimmed[..name_len];
+    let rest = skip_cmake_space(trimmed.as_bytes(), name_len);
+    (trimmed.as_bytes().get(rest) == Some(&b'(')).then_some(name)
+}
+
+fn rewrite_target_link_libraries(
+    command: &str,
+    prefixes: &[String],
+) -> Result<Option<String>, String> {
+    let trimmed = command.trim_start();
+    let indent = &command[..command.len() - trimmed.len()];
+    let Some(open_rel) = trimmed.find('(') else {
+        return Err("unsupported CMake layout: malformed target_link_libraries".into());
+    };
+    let open = open_rel;
+    let close = trimmed
+        .rfind(')')
+        .ok_or_else(|| "unsupported CMake layout: unterminated target_link_libraries".to_owned())?;
+    let inside = &trimmed[open + 1..close];
+    let after = &trimmed[close + 1..];
+    if !after.trim().is_empty() {
+        return Err(
+            "unsupported CMake layout: trailing content after target_link_libraries".into(),
+        );
+    }
+    let tokens = cmake_command_tokens(inside)?;
+    if tokens.is_empty() {
+        return Ok(None);
+    }
+    let kept: Vec<String> = std::iter::once(tokens[0].clone())
+        .chain(
+            tokens[1..]
+                .iter()
+                .filter(|token| !link_token_removed(token, prefixes))
+                .cloned(),
+        )
+        .collect();
+    if kept.len() <= 1 || kept[1..].iter().all(|token| keyword(token)) {
+        return Ok(None);
+    }
+    let multiline = inside.contains('\n');
+    let rewritten = if multiline {
+        format_multiline_command(indent, "target_link_libraries", &kept)
+    } else {
+        format!("target_link_libraries({})", kept.join(" "))
+    };
+    Ok(Some(rewritten))
+}
+
+fn cmake_command_tokens(inside: &str) -> Result<Vec<String>, String> {
+    let bytes = inside.as_bytes();
+    let mut tokens = Vec::new();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match bytes[i] {
+            b' ' | b'\t' | b'\r' | b'\n' => i += 1,
+            b'#' | b'"' | b'[' | b'(' | b')' | b'$' | b'{' | b'}' | b';' | b'\\' => {
+                return Err(
+                    "unsupported CMake layout: cannot safely rewrite target_link_libraries".into(),
+                );
+            }
+            _ => {
+                let start = i;
+                while i < bytes.len()
+                    && !matches!(
+                        bytes[i],
+                        b' ' | b'\t'
+                            | b'\r'
+                            | b'\n'
+                            | b'#'
+                            | b'"'
+                            | b'['
+                            | b'('
+                            | b')'
+                            | b'$'
+                            | b'{'
+                            | b'}'
+                            | b';'
+                            | b'\\'
+                    )
+                {
+                    i += 1;
+                }
+                tokens.push(inside[start..i].to_owned());
+            }
+        }
+    }
+    Ok(tokens)
+}
+
+fn link_token_removed(token: &str, prefixes: &[String]) -> bool {
+    let lower = token.to_ascii_lowercase();
+    prefixes
+        .iter()
+        .any(|prefix| lower.starts_with(prefix.as_str()))
+}
+
+fn format_multiline_command(indent: &str, name: &str, tokens: &[String]) -> String {
+    let mut out = format!("{name}(\n");
+    for token in tokens {
+        out.push_str(indent);
+        out.push_str("  ");
+        out.push_str(token);
+        out.push('\n');
+    }
+    out.push_str(indent);
+    out.push(')');
+    out
 }
 
 fn keyword(token: &str) -> bool {
     matches!(
-        token,
+        token.to_ascii_uppercase().as_str(),
         "PRIVATE"
             | "PUBLIC"
             | "INTERFACE"
             | "LINK_PRIVATE"
             | "LINK_PUBLIC"
             | "LINK_INTERFACE_LIBRARIES"
-            | "debug"
-            | "optimized"
-            | "general"
+            | "DEBUG"
+            | "OPTIMIZED"
+            | "GENERAL"
     )
 }
 
-fn find_package_name(line: &str) -> Option<&str> {
-    let trimmed = line.trim_start();
-    if !trimmed.to_ascii_lowercase().starts_with("find_package(") {
-        return None;
+fn find_package_name(command: &str) -> Option<&str> {
+    let trimmed = command.trim_start();
+    let lower = trimmed.to_ascii_lowercase();
+    if !lower.starts_with("find_package(") {
+        let name = command_name(trimmed)?;
+        if !name.eq_ignore_ascii_case("find_package") {
+            return None;
+        }
     }
-    let rest = trimmed["find_package(".len()..].trim_start();
-    let name = rest.split(|c: char| c.is_whitespace() || c == ')' || c == ',').next().unwrap_or("");
-    (!name.is_empty()).then_some(name)
+    let open = trimmed.find('(')?;
+    let rest = &trimmed[open + 1..];
+    let close = rest.rfind(')').unwrap_or(rest.len());
+    let inside = &rest[..close];
+    let pkg = inside
+        .split(|c: char| c.is_whitespace() || c == ')' || c == ',' || c == ';' || c == '#')
+        .find(|s| !s.is_empty())?;
+    Some(pkg)
 }
 
 fn executable_of(line: &str) -> Option<String> {
@@ -439,8 +823,10 @@ fn executable_of(line: &str) -> Option<String> {
         return None;
     }
     let rest = trimmed["add_executable(".len()..].trim_start();
-    let name: String =
-        rest.chars().take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-')).collect();
+    let name: String = rest
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-'))
+        .collect();
     (!name.is_empty()).then_some(name)
 }
 
@@ -464,7 +850,10 @@ pub fn cmake_lines(output: &str) -> (Vec<String>, Vec<String>) {
             continue;
         }
         if let Some(rest) = words.strip_prefix("find_package(") {
-            let name = rest.split(|c: char| c.is_whitespace() || c == ')' || c == ',').next().unwrap_or("");
+            let name = rest
+                .split(|c: char| c.is_whitespace() || c == ')' || c == ',')
+                .next()
+                .unwrap_or("");
             if !name.is_empty() {
                 find.push(name.to_owned());
             }
@@ -481,10 +870,17 @@ fn target_tokens(line: &str) -> Vec<String> {
     let is_name = |c: char| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-');
     let mut tokens = Vec::new();
     for raw in line.split_whitespace() {
-        let token =
-            raw.trim_matches(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-' | ':')));
-        let Some((namespace, name)) = token.split_once("::") else { continue };
-        if !namespace.is_empty() && !name.is_empty() && namespace.chars().all(is_name) && name.chars().all(is_name) {
+        let token = raw.trim_matches(|c: char| {
+            !(c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-' | ':'))
+        });
+        let Some((namespace, name)) = token.split_once("::") else {
+            continue;
+        };
+        if !namespace.is_empty()
+            && !name.is_empty()
+            && namespace.chars().all(is_name)
+            && name.chars().all(is_name)
+        {
             tokens.push(token.to_owned());
         }
     }
@@ -507,7 +903,11 @@ fn installed(project: &Project) -> Vec<(String, String)> {
     if let Ok(text) = project.read_file(CONANFILE_PY) {
         found.extend(python_requires(&text));
     } else if let Ok(text) = project.read_file(CONANFILE) {
-        found.extend(read_requires(&text).into_iter().filter_map(|reference| split_ref(&reference)));
+        found.extend(
+            read_requires(&text)
+                .into_iter()
+                .filter_map(|reference| split_ref(&reference)),
+        );
     }
     let mut seen: Vec<String> = Vec::new();
     found.retain(|(name, _)| {
@@ -523,11 +923,17 @@ fn installed(project: &Project) -> Vec<(String, String)> {
 }
 
 fn installed_version(installed: &[(String, String)], name: &str) -> Option<String> {
-    installed.iter().find(|(known, _)| known.eq_ignore_ascii_case(name)).map(|(_, version)| version.clone())
+    installed
+        .iter()
+        .find(|(known, _)| known.eq_ignore_ascii_case(name))
+        .map(|(_, version)| version.clone())
 }
 
 fn project_name(root: &str) -> String {
-    root.rsplit(['/', '\\']).find(|part| !part.is_empty()).unwrap_or(root).to_owned()
+    root.rsplit(['/', '\\'])
+        .find(|part| !part.is_empty())
+        .unwrap_or(root)
+        .to_owned()
 }
 
 /// The build folder to install into: one this project already configured,
@@ -535,7 +941,11 @@ fn project_name(root: &str) -> String {
 fn build_dir(project: &Project) -> String {
     BUILD_DIRS
         .iter()
-        .find(|dir| project.exists(&format!("{dir}/CMakeCache.txt")).unwrap_or(false))
+        .find(|dir| {
+            project
+                .exists(&format!("{dir}/CMakeCache.txt"))
+                .unwrap_or(false)
+        })
         .map_or("build", |dir| *dir)
         .to_owned()
 }
@@ -556,7 +966,8 @@ fn read_center(query: &str) -> Result<Vec<Recipe>, String> {
 
 fn read_details(name: &str) -> Result<Details, String> {
     let value = get_json(&format!("{DETAILS}{}", encode(name)))?;
-    parse_details(name, &value).ok_or_else(|| format!("Conan Center describes no recipe named {name}"))
+    parse_details(name, &value)
+        .ok_or_else(|| format!("Conan Center describes no recipe named {name}"))
 }
 
 fn parse_details(name: &str, value: &Value) -> Option<Details> {
@@ -577,7 +988,13 @@ fn parse_details(name: &str, value: &Value) -> Option<Details> {
 fn entry_details(entry: &Value) -> Details {
     let info = &entry["info"];
     let texts = |key: &str| {
-        info[key].as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_owned).collect::<Vec<_>>()
+        info[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
     };
     Details {
         description: info["description"].as_str().unwrap_or("").trim().to_owned(),
@@ -588,8 +1005,8 @@ fn entry_details(entry: &Value) -> Details {
 }
 
 fn get_json(url: &str) -> Result<Value, String> {
-    let response =
-        host::fetch(&HttpRequest::get(url).header("accept", "application/json")).map_err(|error| error.to_string())?;
+    let response = host::fetch(&HttpRequest::get(url).header("accept", "application/json"))
+        .map_err(|error| error.to_string())?;
     if response.status != 200 {
         return Err(format!("{url}: HTTP {}", response.status));
     }
@@ -633,8 +1050,13 @@ impl Spawned for HostSpawned {
 type Spawn<'a> = dyn Fn(&Command) -> Result<Box<dyn Spawned>, Error> + 'a;
 
 /// Starts commands in the project's root, as `process:<program>` allows.
-fn host_spawn<'a>(project: &'a Project) -> impl Fn(&Command) -> Result<Box<dyn Spawned>, Error> + 'a {
-    move |cmd| host::start(cmd, Some(project)).map(|child| Box::new(HostSpawned(child)) as Box<dyn Spawned>)
+fn host_spawn<'a>(
+    project: &'a Project,
+) -> impl Fn(&Command) -> Result<Box<dyn Spawned>, Error> + 'a {
+    move |cmd| {
+        host::start(cmd, Some(project))
+            .map(|child| Box::new(HostSpawned(child)) as Box<dyn Spawned>)
+    }
 }
 
 fn command(program: &str, args: &[String]) -> Command {
@@ -645,7 +1067,9 @@ fn needs_profile(output: &str) -> bool {
     let lower = output.to_ascii_lowercase();
     lower.contains("conan profile detect")
         || (lower.contains("profile")
-            && ["not found", "does not exist", "doesn't exist", "missing"].iter().any(|word| lower.contains(word)))
+            && ["not found", "does not exist", "doesn't exist", "missing"]
+                .iter()
+                .any(|word| lower.contains(word)))
 }
 
 /// One program run to its end, reporting so it isn't cut off at the call
@@ -672,25 +1096,46 @@ fn run_step(task: &Task, cmd: &Command, spawn: &Spawn) -> Result<Ran, Error> {
             return Err(Error::Cancelled);
         }
         if let Some(status) = chunk.status {
-            return Ok(Ran { ok: status == 0, output });
+            return Ok(Ran {
+                ok: status == 0,
+                output,
+            });
         }
     }
 }
 
 fn conan_install(task: &Task, spawn: &Spawn, build: &str, may_build: bool) -> Result<Ran, Error> {
     let folder = format!("{build}/conan");
-    let building = if may_build { "--build=missing" } else { "--build=never" };
+    let building = if may_build {
+        "--build=missing"
+    } else {
+        "--build=never"
+    };
     let mut output = String::new();
     for build_type in BUILD_TYPES {
         let setting = format!("build_type={build_type}");
-        let args: Vec<String> = ["install", ".", "--output-folder", &folder, building, "-s", &setting]
-            .iter()
-            .map(|arg| (*arg).to_owned())
-            .collect();
+        let args: Vec<String> = [
+            "install",
+            ".",
+            "--output-folder",
+            &folder,
+            building,
+            "-s",
+            &setting,
+        ]
+        .iter()
+        .map(|arg| (*arg).to_owned())
+        .collect();
         let mut ran = run_step(task, &command("conan", &args), spawn)?;
         if !ran.ok && needs_profile(&ran.output) {
-            let detect =
-                run_step(task, &command("conan", &["profile".into(), "detect".into(), "--force".into()]), spawn)?;
+            let detect = run_step(
+                task,
+                &command(
+                    "conan",
+                    &["profile".into(), "detect".into(), "--force".into()],
+                ),
+                spawn,
+            )?;
             ran.output.push_str(&format!("\n\n{}", detect.output));
             if detect.ok {
                 let again = run_step(task, &command("conan", &args), spawn)?;
@@ -750,14 +1195,23 @@ fn configure(project: &Project, task: &Task, spawn: &Spawn, build: &str) -> Resu
     );
     let first = run_step(task, &command("cmake", &args), spawn)?;
     let mut output = first.output;
-    if !first.ok && output.contains("--fresh") && output.to_ascii_lowercase().contains("unknown argument") {
+    if !first.ok
+        && output.contains("--fresh")
+        && output.to_ascii_lowercase().contains("unknown argument")
+    {
         // CMake before 3.24 has no --fresh; the cached values stay, as before.
         args.retain(|arg| arg != "--fresh");
         let again = run_step(task, &command("cmake", &args), spawn)?;
         output.push_str(&format!("\n\n{}", again.output));
-        return Ok(Ran { ok: again.ok, output });
+        return Ok(Ran {
+            ok: again.ok,
+            output,
+        });
     }
-    Ok(Ran { ok: first.ok, output })
+    Ok(Ran {
+        ok: first.ok,
+        output,
+    })
 }
 
 fn apply_change(
@@ -777,7 +1231,12 @@ fn apply_change(
     };
     match try_change(project, task, spawn, change, name, version, &title) {
         Ok(outcome) => outcome,
-        Err(problem) => Outcome { ok: false, title, output: String::new(), problem: Some(problem) },
+        Err(problem) => Outcome {
+            ok: false,
+            title,
+            output: String::new(),
+            problem: Some(problem),
+        },
     }
 }
 
@@ -798,7 +1257,11 @@ fn try_change(
             "the project has a conanfile.py; edit it by hand, this plugin only changes conanfile.txt".to_owned()
         );
     }
-    let before = if has_txt { project.read_file(CONANFILE).map_err(error)? } else { default_conanfile() };
+    let before = if has_txt {
+        project.read_file(CONANFILE).map_err(error)?
+    } else {
+        default_conanfile()
+    };
     let has_lists = project.exists(CMAKE_LISTS).map_err(error)?;
     let build = build_dir(project);
     // What the requirements contribute to CMake now, so Remove can take away a
@@ -806,7 +1269,8 @@ fn try_change(
     // Best effort: an install that fails here only leaves the name-based removal.
     let before_find = if change == Change::Remove && has_txt && has_lists {
         // Only reporting what is installed, so never build here.
-        conan_install(task, spawn, &build, false).map_or_else(|_| Vec::new(), |ran| cmake_lines(&ran.output).0)
+        conan_install(task, spawn, &build, false)
+            .map_or_else(|_| Vec::new(), |ran| cmake_lines(&ran.output).0)
     } else {
         Vec::new()
     };
@@ -817,19 +1281,25 @@ fn try_change(
             if split_ref(&format!("{name}/{version}")).is_none() {
                 return Err(format!("{name}/{version} is not a valid Conan reference"));
             }
-            requires.retain(|known| split_ref(known).is_none_or(|(other, _)| !other.eq_ignore_ascii_case(name)));
+            requires.retain(|known| {
+                split_ref(known).is_none_or(|(other, _)| !other.eq_ignore_ascii_case(name))
+            });
             requires.push(format!("{name}/{version}"));
             requires.clone()
         }
         Change::Remove => {
-            requires.retain(|known| split_ref(known).is_none_or(|(other, _)| !other.eq_ignore_ascii_case(name)));
+            requires.retain(|known| {
+                split_ref(known).is_none_or(|(other, _)| !other.eq_ignore_ascii_case(name))
+            });
             if requires.len() == read_requires(&before).len() {
                 return Err(format!("the project does not ask for {name}"));
             }
             requires.clone()
         }
     };
-    project.write_file(CONANFILE, &with_requires(&before, &requires)).map_err(error)?;
+    project
+        .write_file(CONANFILE, &with_requires(&before, &requires))
+        .map_err(error)?;
 
     let installed = conan_install(task, spawn, &build, true).map_err(error)?;
     if !installed.ok {
@@ -844,7 +1314,10 @@ fn try_change(
     if find.is_empty() {
         // Conan's own words are the best source; its CMakeDeps block is always
         // printed, but a recipe's package name may differ from its recipe name.
-        find = needed.iter().filter_map(|reference| split_ref(reference).map(|(name, _)| name)).collect();
+        find = needed
+            .iter()
+            .filter_map(|reference| split_ref(reference).map(|(name, _)| name))
+            .collect();
     }
     if has_lists {
         let lists = project.read_file(CMAKE_LISTS).map_err(error)?;
@@ -857,7 +1330,7 @@ fn try_change(
                     .filter(|package| !find.iter().any(|kept| kept.eq_ignore_ascii_case(package)))
                     .cloned(),
             );
-            edited = without_packages(&edited, &removed);
+            edited = without_packages(&edited, &removed)?;
         }
         if !requires.is_empty() {
             edited = with_packages(&edited, &find, &link);
@@ -871,11 +1344,17 @@ fn try_change(
             ok: configured.ok,
             title: title.to_owned(),
             output,
-            problem: (!configured.ok)
-                .then(|| "installed, but the CMake configure failed; its output says why".to_owned()),
+            problem: (!configured.ok).then(|| {
+                "installed, but the CMake configure failed; its output says why".to_owned()
+            }),
         });
     }
-    Ok(Outcome { ok: true, title: title.to_owned(), output: installed.output, problem: None })
+    Ok(Outcome {
+        ok: true,
+        title: title.to_owned(),
+        output: installed.output,
+        problem: None,
+    })
 }
 
 fn limit_log(text: &str) -> String {
@@ -902,7 +1381,10 @@ fn search_message(project: Option<&Project>, seq: u64, query: &str) -> Value {
     };
     let installed = installed(project);
     let recipes = if query.is_empty() {
-        let refs = installed.iter().map(|(name, version)| format!("{name}/{version}")).collect::<Vec<_>>();
+        let refs = installed
+            .iter()
+            .map(|(name, version)| format!("{name}/{version}"))
+            .collect::<Vec<_>>();
         recipes_from_refs(refs)
     } else {
         match read_center(query) {
@@ -952,12 +1434,21 @@ fn sort_for(recipes: &mut [Recipe], query: &str) {
         }
     };
     recipes.sort_by(|a, b| {
-        rank(&a.name).cmp(&rank(&b.name)).then_with(|| a.name.to_ascii_lowercase().cmp(&b.name.to_ascii_lowercase()))
+        rank(&a.name).cmp(&rank(&b.name)).then_with(|| {
+            a.name
+                .to_ascii_lowercase()
+                .cmp(&b.name.to_ascii_lowercase())
+        })
     });
 }
 
 impl Plugin for Conan {
-    fn run_command(&mut self, id: &str, _ctx: &Invocation, _arg: Option<&str>) -> Result<Option<String>, Error> {
+    fn run_command(
+        &mut self,
+        id: &str,
+        _ctx: &Invocation,
+        _arg: Option<&str>,
+    ) -> Result<Option<String>, Error> {
         match id {
             "open" => {
                 host::reveal_view(VIEW)?;
@@ -969,7 +1460,12 @@ impl Plugin for Conan {
 }
 
 impl Views for Conan {
-    fn render(&mut self, view: &str, _viewport: Option<Viewport>, ctx: &Invocation) -> Result<View, Error> {
+    fn render(
+        &mut self,
+        view: &str,
+        _viewport: Option<Viewport>,
+        ctx: &Invocation,
+    ) -> Result<View, Error> {
         if view != VIEW {
             return Err(Error::NotFound(view.into()));
         }
@@ -1009,16 +1505,28 @@ impl Views for Conan {
         if view != VIEW {
             return Err(Error::NotFound(view.into()));
         }
-        let ViewEvent::Message(text) = event else { return Ok(()) };
-        let Ok(message) = serde_json::from_str::<Value>(&text) else { return Ok(()) };
+        let ViewEvent::Message(text) = event else {
+            return Ok(());
+        };
+        let Ok(message) = serde_json::from_str::<Value>(&text) else {
+            return Ok(());
+        };
         match message["op"].as_str().unwrap_or_default() {
             "search" => {
                 let seq = message["seq"].as_u64().unwrap_or(0);
-                let query = message["query"].as_str().unwrap_or_default().trim().to_owned();
+                let query = message["query"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned();
                 post(&search_message(ctx.project().as_ref(), seq, &query))
             }
             "details" => {
-                let name = message["name"].as_str().unwrap_or_default().trim().to_owned();
+                let name = message["name"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned();
                 if name.is_empty() {
                     return Ok(());
                 }
@@ -1035,8 +1543,16 @@ impl Views for Conan {
                 }
             }
             "install" | "remove" => {
-                let change = if message["op"] == "install" { Change::Install } else { Change::Remove };
-                let name = message["name"].as_str().unwrap_or_default().trim().to_owned();
+                let change = if message["op"] == "install" {
+                    Change::Install
+                } else {
+                    Change::Remove
+                };
+                let name = message["name"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_owned();
                 let version = message["version"].as_str().map(str::to_owned);
                 if name.is_empty() {
                     return Ok(());
@@ -1058,7 +1574,14 @@ impl Views for Conan {
                 };
                 post(&json!({ "op": "busy", "busy": true, "title": title }))?;
                 let task = host::begin_task(&format!("Conan: {title}"), true);
-                let outcome = apply_change(&project, &task, &host_spawn(&project), change, &name, version.as_deref());
+                let outcome = apply_change(
+                    &project,
+                    &task,
+                    &host_spawn(&project),
+                    change,
+                    &name,
+                    version.as_deref(),
+                );
                 post(&json!({
                     "op": "result",
                     "ok": outcome.ok,
@@ -1138,7 +1661,11 @@ Generator 'CMakeToolchain' calling 'generate()'
     }
 
     fn response(json: &str) -> HttpResponse {
-        HttpResponse { status: 200, headers: Vec::new(), body: json.as_bytes().to_vec() }
+        HttpResponse {
+            status: 200,
+            headers: Vec::new(),
+            body: json.as_bytes().to_vec(),
+        }
     }
 
     /// A process that answers `wait` with one scripted chunk, as a real one
@@ -1184,10 +1711,16 @@ Generator 'CMakeToolchain' calling 'generate()'
         )
         .unwrap();
         let recipes = recipes_from_json(&value);
-        assert_eq!(recipes.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(), ["fmt", "zlib"]);
+        assert_eq!(
+            recipes.iter().map(|r| r.name.as_str()).collect::<Vec<_>>(),
+            ["fmt", "zlib"]
+        );
         assert_eq!(recipes[0].versions, ["11.0.2", "10.2.1", "9.1.0"]);
         assert_eq!(recipes[1].versions, ["1.3.1", "1.2.13"]);
-        assert_eq!(split_ref("zlib/1.3.1@user/stable"), Some(("zlib".into(), "1.3.1".into())));
+        assert_eq!(
+            split_ref("zlib/1.3.1@user/stable"),
+            Some(("zlib".into(), "1.3.1".into()))
+        );
         assert_eq!(split_ref("zlib"), None);
     }
 
@@ -1197,42 +1730,215 @@ Generator 'CMakeToolchain' calling 'generate()'
         let after = with_requires(before, &["fmt/12.2.0".into(), "zlib/1.4.0".into()]);
         assert!(!after.contains("[settings]"));
         assert!(!after.contains("compiler=gcc"));
-        assert!(after.contains("[requires]\nfmt/12.2.0\nzlib/1.4.0\n"), "{after}");
-        assert!(after.contains("[generators]\nPkgConfigDeps\nCMakeDeps\nCMakeToolchain\n"), "{after}");
+        assert!(
+            after.contains("[requires]\nfmt/12.2.0\nzlib/1.4.0\n"),
+            "{after}"
+        );
+        assert!(
+            after.contains("[generators]\nPkgConfigDeps\nCMakeDeps\nCMakeToolchain\n"),
+            "{after}"
+        );
         assert!(after.contains("[options]\nzlib:shared=True"), "{after}");
         assert_eq!(read_requires(&after), ["fmt/12.2.0", "zlib/1.4.0"]);
 
         let fresh = with_requires("", &["fmt/12.2.0".into()]);
-        assert_eq!(fresh, "[requires]\nfmt/12.2.0\n\n[generators]\nCMakeDeps\nCMakeToolchain\n");
+        assert_eq!(
+            fresh,
+            "[requires]\nfmt/12.2.0\n\n[generators]\nCMakeDeps\nCMakeToolchain\n"
+        );
     }
 
     #[test]
     fn cmake_edits_are_idempotent_and_removable() {
-        let lists =
-            "cmake_minimum_required(VERSION 3.20)\nproject(app LANGUAGES CXX)\n\nadd_executable(app src/main.cpp)\n";
-        let with = with_packages(lists, &["fmt".into(), "ZLIB".into()], &["fmt::fmt".into(), "ZLIB::ZLIB".into()]);
-        assert!(with.contains("find_package(fmt REQUIRED)\nfind_package(ZLIB REQUIRED)\nadd_executable"), "{with}");
-        assert!(with.ends_with("target_link_libraries(app PRIVATE fmt::fmt ZLIB::ZLIB)\n"), "{with}");
-        assert_eq!(with_packages(&with, &["fmt".into()], &["fmt::fmt".into()]), with);
+        let lists = "cmake_minimum_required(VERSION 3.20)\nproject(app LANGUAGES CXX)\n\nadd_executable(app src/main.cpp)\n";
+        let with = with_packages(
+            lists,
+            &["fmt".into(), "ZLIB".into()],
+            &["fmt::fmt".into(), "ZLIB::ZLIB".into()],
+        );
+        assert!(
+            with.contains(
+                "find_package(fmt REQUIRED)\nfind_package(ZLIB REQUIRED)\nadd_executable"
+            ),
+            "{with}"
+        );
+        assert!(
+            with.ends_with("target_link_libraries(app PRIVATE fmt::fmt ZLIB::ZLIB)\n"),
+            "{with}"
+        );
+        assert_eq!(
+            with_packages(&with, &["fmt".into()], &["fmt::fmt".into()]),
+            with
+        );
 
-        let without = without_packages(&with, &["fmt".to_owned()]);
+        let without = without_packages(&with, &["fmt".to_owned()]).unwrap();
         assert!(!without.contains("find_package(fmt"), "{without}");
         assert!(without.contains("find_package(ZLIB REQUIRED)"), "{without}");
-        assert!(without.contains("target_link_libraries(app PRIVATE ZLIB::ZLIB)"), "{without}");
+        assert!(
+            without.contains("target_link_libraries(app PRIVATE ZLIB::ZLIB)"),
+            "{without}"
+        );
         assert_eq!(
-            without_packages(&without_packages(&with, &["fmt".to_owned()]), &["fmt".to_owned()]),
-            without_packages(&with, &["fmt".to_owned()])
+            without_packages(
+                &without_packages(&with, &["fmt".to_owned()]).unwrap(),
+                &["fmt".to_owned()]
+            )
+            .unwrap(),
+            without_packages(&with, &["fmt".to_owned()]).unwrap()
         );
 
         let only = "add_executable(app main.cpp)\ntarget_link_libraries(app PRIVATE fmt::fmt)\n";
-        assert!(!without_packages(only, &["fmt".to_owned()]).contains("target_link_libraries"), "{only}");
+        assert!(
+            !without_packages(only, &["fmt".to_owned()])
+                .unwrap()
+                .contains("target_link_libraries"),
+            "{only}"
+        );
+    }
+
+    #[test]
+    fn cmake_multiline_commands_are_removed_as_complete_spans() {
+        let lists = "cmake_minimum_required(VERSION 3.20)\n\
+project(app LANGUAGES CXX)\n\
+\n\
+find_package(fmt\n\
+  CONFIG REQUIRED\n\
+)\n\
+find_package(ZLIB REQUIRED)\n\
+add_executable(app src/main.cpp)\n\
+target_link_libraries(app\n\
+  PRIVATE\n\
+  fmt::fmt\n\
+  ZLIB::ZLIB\n\
+)\n";
+        let without = without_packages(lists, &["fmt".to_owned()]).unwrap();
+        assert!(!without.contains("CONFIG REQUIRED"), "{without}");
+        assert!(!without.contains("fmt::fmt"), "{without}");
+        assert!(!without.contains("find_package(fmt"), "{without}");
+        assert!(without.contains("find_package(ZLIB REQUIRED)"), "{without}");
+        assert!(without.contains("ZLIB::ZLIB"), "{without}");
+        assert!(without.contains("target_link_libraries("), "{without}");
+        assert_eq!(
+            without.matches(')').count(),
+            lists.matches(')').count() - 1,
+            "{without}"
+        );
+    }
+
+    #[test]
+    fn unsupported_cmake_layout_is_rejected_before_writing() {
+        let lists = "add_executable(app main.cpp)\n\
+target_link_libraries(app\n\
+  PRIVATE\n\
+  fmt::fmt\n\
+  $<IF:$<CONFIG:Debug>,ZLIB::ZLIBDEBUG,ZLIB::ZLIB>\n\
+)\n";
+        let err = without_packages(lists, &["fmt".to_owned()]).unwrap_err();
+        assert!(err.contains("unsupported CMake layout"), "{err}");
+
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "project.write",
+            "process:conan",
+            "process:cmake",
+        ]);
+        host.add_file(
+            "conanfile.txt",
+            "[requires]\nfmt/11.0.2\nzlib/1.3.1\n\n[generators]\nCMakeDeps\nCMakeToolchain\n",
+        );
+        host.add_file("CMakeLists.txt", lists);
+        let spawn = move |cmd: &Command| -> Result<Box<dyn Spawned>, Error> {
+            match cmd.program.as_str() {
+                "conan" => Ok(Box::new(FakeChild::done(FMT_AND_ZLIB))),
+                "cmake" => Ok(Box::new(FakeChild::done(""))),
+                other => panic!("unexpected program {other}"),
+            }
+        };
+        let project = invocation(&host).project().expect("project");
+        let task = host::begin_task("test", true);
+        let outcome = apply_change(&project, &task, &spawn, Change::Remove, "fmt", None);
+        assert!(!outcome.ok, "{:?}", outcome.problem);
+        let problem = outcome.problem.unwrap_or_default();
+        assert!(problem.contains("unsupported CMake layout"), "{problem}");
+        let after = project.read_file("CMakeLists.txt").unwrap();
+        assert_eq!(after, lists, "CMakeLists must not be damaged");
+    }
+
+    #[test]
+    fn removing_through_apply_change_preserves_multiline_cmake_commands() {
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "project.write",
+            "process:conan",
+            "process:cmake",
+        ]);
+        host.add_file(
+            "conanfile.txt",
+            "[requires]\nfmt/11.0.2\nzlib/1.3.1\n\n[generators]\nCMakeDeps\nCMakeToolchain\n",
+        );
+        host.add_file(
+            "CMakeLists.txt",
+            "cmake_minimum_required(VERSION 3.20)\n\
+project(app LANGUAGES CXX)\n\
+add_executable(app src/main.cpp)\n\
+find_package(fmt\n\
+  CONFIG REQUIRED\n\
+)\n\
+find_package(ZLIB REQUIRED)\n\
+target_link_libraries(app\n\
+  PRIVATE\n\
+  fmt::fmt\n\
+  ZLIB::ZLIB\n\
+)\n",
+        );
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        let spawn_calls = calls.clone();
+        let spawn = move |cmd: &Command| -> Result<Box<dyn Spawned>, Error> {
+            match cmd.program.as_str() {
+                "conan" => {
+                    spawn_calls.set(spawn_calls.get() + 1);
+                    let before = cmd.args.contains(&"--build=never".to_string());
+                    let output = if before {
+                        FMT_AND_ZLIB
+                    } else {
+                        "CMakeDeps necessary find_package() and targets for your CMakeLists.txt\n    find_package(ZLIB)\n    target_link_libraries(... ZLIB::ZLIB)\n"
+                    };
+                    Ok(Box::new(FakeChild::done(output)))
+                }
+                "cmake" => Ok(Box::new(FakeChild::done(""))),
+                other => panic!("unexpected program {other}"),
+            }
+        };
+        let project = invocation(&host).project().expect("project");
+        let task = host::begin_task("test", true);
+        let outcome = apply_change(&project, &task, &spawn, Change::Remove, "fmt", None);
+        assert!(outcome.ok, "{:?}", outcome.problem);
+        let lists = project.read_file("CMakeLists.txt").unwrap();
+        assert!(!lists.contains("find_package(fmt"), "{lists}");
+        assert!(!lists.contains("CONFIG REQUIRED"), "{lists}");
+        assert!(!lists.contains("fmt::fmt"), "{lists}");
+        assert!(lists.contains("find_package(ZLIB REQUIRED)"), "{lists}");
+        assert!(lists.contains("ZLIB::ZLIB"), "{lists}");
+        assert_eq!(
+            lists.matches("target_link_libraries(").count(),
+            1,
+            "{lists}"
+        );
+        assert_eq!(calls.get(), 4);
     }
 
     #[test]
     fn removing_a_recipe_takes_away_its_differently_named_cmake_package() {
-        let host =
-            MockHost::install().with_capabilities(&["project.read", "project.write", "process:conan", "process:cmake"]);
-        host.add_file("conanfile.txt", "[requires]\nzlib/1.3.1\n\n[generators]\nCMakeDeps\nCMakeToolchain\n");
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "project.write",
+            "process:conan",
+            "process:cmake",
+        ]);
+        host.add_file(
+            "conanfile.txt",
+            "[requires]\nzlib/1.3.1\n\n[generators]\nCMakeDeps\nCMakeToolchain\n",
+        );
         host.add_file(
             "CMakeLists.txt",
             "add_executable(app main.cpp)\nfind_package(ZLIB REQUIRED)\ntarget_link_libraries(app PRIVATE ZLIB::ZLIB)\n",
@@ -1246,7 +1952,11 @@ Generator 'CMakeToolchain' calling 'generate()'
                 "conan" => {
                     spawn_calls.set(spawn_calls.get() + 1);
                     let before = cmd.args.contains(&"--build=never".to_string());
-                    Ok(Box::new(FakeChild::done(if before { ZLIB_ONLY } else { "Install finished successfully\n" })))
+                    Ok(Box::new(FakeChild::done(if before {
+                        ZLIB_ONLY
+                    } else {
+                        "Install finished successfully\n"
+                    })))
                 }
                 "cmake" => Ok(Box::new(FakeChild::done(""))),
                 other => panic!("unexpected program {other}"),
@@ -1259,7 +1969,11 @@ Generator 'CMakeToolchain' calling 'generate()'
         let lists = project.read_file("CMakeLists.txt").unwrap();
         assert!(!lists.contains("ZLIB"), "{lists}");
         assert!(!lists.contains("find_package"), "{lists}");
-        assert_eq!(calls.get(), 4, "the before and after installs, each for two build types");
+        assert_eq!(
+            calls.get(),
+            4,
+            "the before and after installs, each for two build types"
+        );
     }
 
     #[test]
@@ -1271,16 +1985,23 @@ Generator 'CMakeToolchain' calling 'generate()'
 
     #[test]
     fn a_search_lists_versions_and_the_installed_one() {
-        let host =
-            MockHost::install().with_capabilities(&["project.read", "net:center2.conan.io", "net:center.conan.io"]);
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "net:center2.conan.io",
+            "net:center.conan.io",
+        ]);
         host.add_file("conanfile.txt", "[requires]\nfmt/12.1.0\n");
         host.on_fetch(|request: &HttpRequest| {
             assert!(
-                request.url.starts_with("https://center2.conan.io/v2/conans/search?q=*fmt*"),
+                request
+                    .url
+                    .starts_with("https://center2.conan.io/v2/conans/search?q=*fmt*"),
                 "unexpected URL {}",
                 request.url
             );
-            Ok(response(r#"{"results":["fmt/12.2.0@_/_","fmt/11.0.2@_/_","zlib/1.3.1@_/_"]}"#))
+            Ok(response(
+                r#"{"results":["fmt/12.2.0@_/_","fmt/11.0.2@_/_","zlib/1.3.1@_/_"]}"#,
+            ))
         });
         let mut conan = Conan::default();
         conan
@@ -1294,7 +2015,10 @@ Generator 'CMakeToolchain' calling 'generate()'
         assert_eq!(message["seq"], 7);
         assert_eq!(message["total"], 2);
         assert_eq!(message["recipes"][0]["name"], "fmt");
-        assert_eq!(message["recipes"][0]["versions"], json!(["12.2.0", "11.0.2"]));
+        assert_eq!(
+            message["recipes"][0]["versions"],
+            json!(["12.2.0", "11.0.2"])
+        );
         assert_eq!(message["recipes"][0]["installed"], "12.1.0");
         assert_eq!(message["recipes"][1]["name"], "zlib");
 
@@ -1323,7 +2047,11 @@ Generator 'CMakeToolchain' calling 'generate()'
         });
         let mut conan = Conan::default();
         conan
-            .handle(VIEW, ViewEvent::Message(json!({ "op": "details", "name": "fmt" }).to_string()), &invocation(&host))
+            .handle(
+                VIEW,
+                ViewEvent::Message(json!({ "op": "details", "name": "fmt" }).to_string()),
+                &invocation(&host),
+            )
             .unwrap();
         let message = last(&host);
         assert_eq!(message["description"], "A fast format library.");
@@ -1333,16 +2061,27 @@ Generator 'CMakeToolchain' calling 'generate()'
 
         // Read once: the second request is answered from memory.
         conan
-            .handle(VIEW, ViewEvent::Message(json!({ "op": "details", "name": "FMT" }).to_string()), &invocation(&host))
+            .handle(
+                VIEW,
+                ViewEvent::Message(json!({ "op": "details", "name": "FMT" }).to_string()),
+                &invocation(&host),
+            )
             .unwrap();
         assert_eq!(host.requests().len(), 1);
     }
 
     #[test]
     fn install_writes_the_recipe_and_cmake_then_remove_undoes_it() {
-        let host =
-            MockHost::install().with_capabilities(&["project.read", "project.write", "process:conan", "process:cmake"]);
-        host.add_file("conanfile.txt", "[requires]\nzlib/1.3.1\n\n[generators]\nCMakeDeps\nCMakeToolchain\n");
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "project.write",
+            "process:conan",
+            "process:cmake",
+        ]);
+        host.add_file(
+            "conanfile.txt",
+            "[requires]\nzlib/1.3.1\n\n[generators]\nCMakeDeps\nCMakeToolchain\n",
+        );
         host.add_file(
             "CMakeLists.txt",
             "cmake_minimum_required(VERSION 3.20)\nproject(app LANGUAGES CXX)\n\nadd_executable(app src/main.cpp)\n",
@@ -1362,14 +2101,29 @@ Generator 'CMakeToolchain' calling 'generate()'
                     assert!(cmd.args.contains(&"--output-folder".to_string()));
                     // 1-2: install, 3-4: remove's before, 5-6: remove's after
                     // (fmt is gone from the recipe by then).
-                    Ok(Box::new(FakeChild::done(if n > 4 { ZLIB_ONLY } else { FMT_AND_ZLIB })))
+                    Ok(Box::new(FakeChild::done(if n > 4 {
+                        ZLIB_ONLY
+                    } else {
+                        FMT_AND_ZLIB
+                    })))
                 }
                 "cmake" => {
-                    assert!(cmd.args.contains(&"-DCMAKE_TOOLCHAIN_FILE=build/conan/conan_toolchain.cmake".to_string()));
-                    assert!(cmd.args.contains(&"-DCMAKE_PREFIX_PATH=build/conan".to_string()));
+                    assert!(cmd.args.contains(
+                        &"-DCMAKE_TOOLCHAIN_FILE=build/conan/conan_toolchain.cmake".to_string()
+                    ));
+                    assert!(
+                        cmd.args
+                            .contains(&"-DCMAKE_PREFIX_PATH=build/conan".to_string())
+                    );
                     // No CMakeCache.txt in the mock: a new project starts in Debug.
-                    assert!(cmd.args.contains(&"-DCMAKE_BUILD_TYPE=Debug".to_string()), "{:?}", cmd.args);
-                    Ok(Box::new(FakeChild::done("-- Configuring done\n-- Generating done\n")))
+                    assert!(
+                        cmd.args.contains(&"-DCMAKE_BUILD_TYPE=Debug".to_string()),
+                        "{:?}",
+                        cmd.args
+                    );
+                    Ok(Box::new(FakeChild::done(
+                        "-- Configuring done\n-- Generating done\n",
+                    )))
                 }
                 other => panic!("unexpected program {other}"),
             }
@@ -1377,14 +2131,27 @@ Generator 'CMakeToolchain' calling 'generate()'
         let project = invocation(&host).project().expect("project");
         let task = host::begin_task("test", true);
 
-        let outcome = apply_change(&project, &task, &spawn, Change::Install, "fmt", Some("12.2.0"));
+        let outcome = apply_change(
+            &project,
+            &task,
+            &spawn,
+            Change::Install,
+            "fmt",
+            Some("12.2.0"),
+        );
         assert!(outcome.ok, "{:?}", outcome.problem);
         let recipe = project.read_file("conanfile.txt").unwrap();
-        assert!(recipe.contains("zlib/1.3.1") && recipe.contains("fmt/12.2.0"), "{recipe}");
+        assert!(
+            recipe.contains("zlib/1.3.1") && recipe.contains("fmt/12.2.0"),
+            "{recipe}"
+        );
         let lists = project.read_file("CMakeLists.txt").unwrap();
         assert!(lists.contains("find_package(fmt REQUIRED)"), "{lists}");
         assert!(lists.contains("find_package(ZLIB REQUIRED)"), "{lists}");
-        assert!(lists.contains("target_link_libraries(app PRIVATE fmt::fmt ZLIB::ZLIB)"), "{lists}");
+        assert!(
+            lists.contains("target_link_libraries(app PRIVATE fmt::fmt ZLIB::ZLIB)"),
+            "{lists}"
+        );
 
         let outcome = apply_change(&project, &task, &spawn, Change::Remove, "fmt", None);
         assert!(outcome.ok, "{:?}", outcome.problem);
@@ -1394,24 +2161,50 @@ Generator 'CMakeToolchain' calling 'generate()'
         assert!(!lists.contains("find_package(fmt"), "{lists}");
         assert!(!lists.contains("fmt::fmt"), "{lists}");
         assert!(lists.contains("find_package(ZLIB REQUIRED)"), "{lists}");
-        assert!(lists.contains("target_link_libraries(app PRIVATE ZLIB::ZLIB)"), "{lists}");
-        assert_eq!(conan_calls.borrow().len(), 6, "install, before and after, each for two build types");
-        let settings = conan_calls.borrow().iter().flatten().cloned().collect::<Vec<_>>().join(" ");
-        assert!(settings.contains("build_type=Release") && settings.contains("build_type=Debug"), "{settings}");
+        assert!(
+            lists.contains("target_link_libraries(app PRIVATE ZLIB::ZLIB)"),
+            "{lists}"
+        );
+        assert_eq!(
+            conan_calls.borrow().len(),
+            6,
+            "install, before and after, each for two build types"
+        );
+        let settings = conan_calls
+            .borrow()
+            .iter()
+            .flatten()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            settings.contains("build_type=Release") && settings.contains("build_type=Debug"),
+            "{settings}"
+        );
     }
 
     #[test]
     fn configure_keeps_the_cached_build_type() {
         assert_eq!(build_type_of(None), "Debug");
-        assert_eq!(build_type_of(Some("CMAKE_BUILD_TYPE:STRING=Release\n")), "Release");
-        assert_eq!(build_type_of(Some("CMAKE_BUILD_TYPE:STRING=RelWithDebInfo\n")), "RelWithDebInfo");
+        assert_eq!(
+            build_type_of(Some("CMAKE_BUILD_TYPE:STRING=Release\n")),
+            "Release"
+        );
+        assert_eq!(
+            build_type_of(Some("CMAKE_BUILD_TYPE:STRING=RelWithDebInfo\n")),
+            "RelWithDebInfo"
+        );
         assert_eq!(build_type_of(Some("CMAKE_BUILD_TYPE:STRING=\n")), "Debug");
     }
 
     #[test]
     fn a_cached_release_configure_stays_release() {
-        let host =
-            MockHost::install().with_capabilities(&["project.read", "project.write", "process:conan", "process:cmake"]);
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "project.write",
+            "process:conan",
+            "process:cmake",
+        ]);
         host.add_file("conanfile.txt", "[requires]\nzlib/1.3.1\n");
         host.add_file("CMakeLists.txt", "add_executable(app main.cpp)\n");
         host.add_file(
@@ -1424,13 +2217,30 @@ Generator 'CMakeToolchain' calling 'generate()'
             if cmd.program == "cmake" {
                 *recorded.borrow_mut() = cmd.args.clone();
             }
-            Ok(Box::new(FakeChild::done(if cmd.program == "cmake" { "-- Configuring done\n" } else { FMT_AND_ZLIB })))
+            Ok(Box::new(FakeChild::done(if cmd.program == "cmake" {
+                "-- Configuring done\n"
+            } else {
+                FMT_AND_ZLIB
+            })))
         };
         let project = invocation(&host).project().expect("project");
         let task = host::begin_task("test", true);
-        let outcome = apply_change(&project, &task, &spawn, Change::Install, "fmt", Some("12.2.0"));
+        let outcome = apply_change(
+            &project,
+            &task,
+            &spawn,
+            Change::Install,
+            "fmt",
+            Some("12.2.0"),
+        );
         assert!(outcome.ok, "{:?}", outcome.problem);
-        assert!(cmake_args.borrow().contains(&"-DCMAKE_BUILD_TYPE=Release".to_string()), "{:?}", cmake_args.borrow());
+        assert!(
+            cmake_args
+                .borrow()
+                .contains(&"-DCMAKE_BUILD_TYPE=Release".to_string()),
+            "{:?}",
+            cmake_args.borrow()
+        );
         assert!(!cmake_args.borrow().contains(&"--fresh".to_string()));
     }
 
@@ -1438,16 +2248,35 @@ Generator 'CMakeToolchain' calling 'generate()'
     fn a_change_uses_the_pinned_programs_through_start() {
         // The production spawn goes through host::start: the mock child prints
         // "started: <program>" and ends, which is all a smoke test of it needs.
-        let host =
-            MockHost::install().with_capabilities(&["project.read", "project.write", "process:conan", "process:cmake"]);
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "project.write",
+            "process:conan",
+            "process:cmake",
+        ]);
         host.add_file("conanfile.txt", "[requires]\nzlib/1.3.1\n");
         host.add_file("CMakeLists.txt", "add_executable(app main.cpp)\n");
         let project = invocation(&host).project().expect("project");
         let task = host::begin_task("test", true);
-        let outcome = apply_change(&project, &task, &host_spawn(&project), Change::Install, "fmt", Some("12.2.0"));
+        let outcome = apply_change(
+            &project,
+            &task,
+            &host_spawn(&project),
+            Change::Install,
+            "fmt",
+            Some("12.2.0"),
+        );
         assert!(outcome.ok, "{:?}", outcome.problem);
-        assert!(outcome.output.contains("$ conan install ."), "{:?}", outcome.output);
-        assert!(outcome.output.contains("started: conan"), "{:?}", outcome.output);
+        assert!(
+            outcome.output.contains("$ conan install ."),
+            "{:?}",
+            outcome.output
+        );
+        assert!(
+            outcome.output.contains("started: conan"),
+            "{:?}",
+            outcome.output
+        );
         // Without Conan's words the recipe's own name is the find_package name.
         let lists = project.read_file("CMakeLists.txt").unwrap();
         assert!(lists.contains("find_package(fmt REQUIRED)"), "{lists}");
@@ -1459,15 +2288,26 @@ Generator 'CMakeToolchain' calling 'generate()'
         denied.add_file("conanfile.txt", "[requires]\nzlib/1.3.1\n");
         let project = invocation(&denied).project().expect("project");
         let task = host::begin_task("test", true);
-        let outcome = apply_change(&project, &task, &host_spawn(&project), Change::Install, "fmt", Some("12.2.0"));
+        let outcome = apply_change(
+            &project,
+            &task,
+            &host_spawn(&project),
+            Change::Install,
+            "fmt",
+            Some("12.2.0"),
+        );
         assert!(!outcome.ok);
         assert!(outcome.problem.is_some());
     }
 
     #[test]
     fn a_conanfile_py_is_read_but_never_edited() {
-        let host =
-            MockHost::install().with_capabilities(&["project.read", "project.write", "process:conan", "process:cmake"]);
+        let host = MockHost::install().with_capabilities(&[
+            "project.read",
+            "project.write",
+            "process:conan",
+            "process:cmake",
+        ]);
         host.add_file(
             "conanfile.py",
             "from conan import ConanFile\n\nclass App(ConanFile):\n    requires = \"fmt/12.0.0\"\n",
@@ -1479,13 +2319,18 @@ Generator 'CMakeToolchain' calling 'generate()'
         conan
             .handle(
                 VIEW,
-                ViewEvent::Message(json!({ "op": "install", "name": "zlib", "version": "1.3.1" }).to_string()),
+                ViewEvent::Message(
+                    json!({ "op": "install", "name": "zlib", "version": "1.3.1" }).to_string(),
+                ),
                 &invocation(&host),
             )
             .unwrap();
         let result = last(&host);
         assert_eq!(result["ok"], false);
-        assert!(result["problem"].as_str().unwrap().contains("conanfile.py"), "{result}");
+        assert!(
+            result["problem"].as_str().unwrap().contains("conanfile.py"),
+            "{result}"
+        );
         assert!(host.process_runs().is_empty());
 
         conan
@@ -1506,13 +2351,20 @@ Generator 'CMakeToolchain' calling 'generate()'
         host.add_file("conanfile.txt", "[requires]\nzlib/1.3.1\n");
         host.add_file("CMakeLists.txt", "add_executable(app main.cpp)\n");
         let mut conan = Conan::default();
-        let View { body: Body::Html(page), .. } = conan.render(VIEW, None, &invocation(&host)).unwrap() else {
+        let View {
+            body: Body::Html(page),
+            ..
+        } = conan.render(VIEW, None, &invocation(&host)).unwrap()
+        else {
             panic!("an html body");
         };
         assert!(page.contains(r#""name":"project""#), "{page}");
         assert!(page.contains(r#""recipe":"conanfile.txt""#), "{page}");
         assert!(page.contains(r#""cmakeLists":true"#), "{page}");
-        assert!(page.contains(r#""installed":[{"name":"zlib","version":"1.3.1"}]"#), "{page}");
+        assert!(
+            page.contains(r#""installed":[{"name":"zlib","version":"1.3.1"}]"#),
+            "{page}"
+        );
         assert!(!page.contains("__START__"));
     }
 }
