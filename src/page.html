@@ -1,0 +1,543 @@
+<style>
+  body {
+    margin: 0;
+  }
+  .cn {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px;
+    height: calc(100vh - 16px);
+    box-sizing: border-box;
+    color: var(--openidea-fg);
+    font-family: var(--openidea-font-ui, system-ui, sans-serif);
+    font-size: 12px;
+  }
+  .bar, .row {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+  }
+  input[type="search"],
+  select {
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--openidea-fg);
+    background: var(--openidea-bg-input, transparent);
+    border: 1px solid var(--openidea-border);
+    border-radius: 4px;
+    padding: 4px 6px;
+    outline: none;
+    box-sizing: border-box;
+  }
+  input[type="search"] {
+    flex: 1;
+  }
+  input[type="search"]:focus,
+  select:focus {
+    border-color: var(--openidea-focus-ring, var(--openidea-accent));
+  }
+  button {
+    font-family: inherit;
+    font-size: 12px;
+    color: var(--openidea-fg);
+    background: var(--openidea-bg-elevated, transparent);
+    border: 1px solid var(--openidea-border);
+    border-radius: 4px;
+    padding: 3px 8px;
+    cursor: pointer;
+  }
+  button:hover:not(:disabled) {
+    background: var(--openidea-bg-hover);
+  }
+  button:disabled {
+    color: var(--openidea-fg-muted);
+    cursor: default;
+  }
+  button.danger:hover:not(:disabled) {
+    border-color: var(--openidea-danger);
+    color: var(--openidea-danger);
+  }
+  button.small {
+    padding: 1px 6px;
+    font-size: 11px;
+  }
+  .main {
+    display: grid;
+    grid-template-columns: minmax(190px, 2fr) minmax(0, 3fr);
+    gap: 8px;
+    min-height: 0;
+  }
+  .left,
+  .right {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 0;
+    min-width: 0;
+  }
+  .status {
+    min-height: 16px;
+    color: var(--openidea-fg-muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  .status.error {
+    color: var(--openidea-danger);
+  }
+  .list {
+    flex: 1;
+    overflow: auto;
+    border: 1px solid var(--openidea-border);
+    border-radius: 4px;
+    min-height: 0;
+  }
+  button.item {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: 100%;
+    padding: 4px 6px;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--openidea-border);
+    border-radius: 0;
+  }
+  button.item:hover {
+    background: var(--openidea-bg-hover);
+  }
+  button.item.current {
+    background: var(--openidea-bg-selected);
+  }
+  .name {
+    font-family: var(--openidea-font-mono, ui-monospace, monospace);
+    overflow-wrap: anywhere;
+  }
+  .meta {
+    color: var(--openidea-fg-muted);
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    padding: 0 4px;
+    border: 1px solid var(--openidea-border);
+    border-radius: 8px;
+    color: var(--openidea-fg-muted);
+  }
+  .badge.on {
+    border-color: var(--openidea-accent);
+    color: var(--openidea-accent);
+  }
+  .detail {
+    flex: 1;
+    overflow: auto;
+    border: 1px solid var(--openidea-border);
+    border-radius: 4px;
+    padding: 8px;
+    min-height: 0;
+  }
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  h2 {
+    margin: 0;
+    font-family: var(--openidea-font-mono, ui-monospace, monospace);
+    font-size: 15px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .desc {
+    margin: 6px 0;
+    color: var(--openidea-fg-strong, var(--openidea-fg));
+    overflow-wrap: anywhere;
+  }
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: 4px 0;
+  }
+  .tag {
+    font-size: 10px;
+    padding: 0 5px;
+    border: 1px solid var(--openidea-border);
+    border-radius: 8px;
+    color: var(--openidea-fg-muted);
+  }
+  .empty {
+    color: var(--openidea-fg-muted);
+    margin: 2px 0;
+  }
+  .hint {
+    color: var(--openidea-fg-muted);
+    font-size: 11px;
+    margin: 6px 0 0;
+  }
+  .caption {
+    color: var(--openidea-fg-muted);
+    font-size: 11px;
+  }
+  .logwrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 40%;
+    min-height: 60px;
+  }
+  .logtitle {
+    flex: 1;
+    color: var(--openidea-fg-muted);
+    font-size: 11px;
+  }
+  .log {
+    flex: 1;
+    margin: 0;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: var(--openidea-font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--openidea-fg);
+    background: var(--openidea-bg-input, transparent);
+    border: 1px solid var(--openidea-border);
+    border-radius: 4px;
+    padding: 4px 6px;
+    min-height: 0;
+  }
+</style>
+<div class="cn">
+  <div class="bar">
+    <input
+      id="query"
+      type="search"
+      placeholder="Search Conan Center recipes…"
+      spellcheck="false"
+      autocomplete="off"
+      aria-label="Search Conan Center recipes"
+    />
+    <button id="refresh" type="button" title="Search again">Refresh</button>
+  </div>
+  <div class="main">
+    <section class="left" aria-label="Recipes">
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <div id="list" class="list"></div>
+    </section>
+    <section class="right">
+      <div id="detail" class="detail">
+        <p class="empty">Search Conan Center or pick a package from the project.</p>
+      </div>
+      <div id="logwrap" class="logwrap" hidden>
+        <div class="row">
+          <span class="caption">Output</span>
+          <span id="logtitle" class="logtitle"></span>
+          <button id="clear" class="small" type="button">Clear</button>
+        </div>
+        <pre id="log" class="log" tabindex="0"></pre>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+  (() => {
+    // Replaced by the plugin with the project and its packages (a JSON object).
+    const START = "__START__";
+    const $ = (id) => document.getElementById(id);
+    const query = $("query"),
+      list = $("list"),
+      status = $("status"),
+      detail = $("detail"),
+      logwrap = $("logwrap"),
+      log = $("log"),
+      logtitle = $("logtitle"),
+      refresh = $("refresh"),
+      clear = $("clear");
+    const startup = typeof START === "object" && START ? START : {};
+    const project = startup.project || null;
+    let installed = new Map(
+      (startup.installed || []).map((entry) => [String(entry.name).toLowerCase(), String(entry.version)]),
+    );
+    let seq = 0,
+      recipes = [],
+      selected = null,
+      details = null,
+      detailError = null,
+      busy = false,
+      lastQuery = "",
+      timer = 0;
+
+    const esc = (text) =>
+      String(text ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    const same = (a, b) => !!a && !!b && a.toLowerCase() === b.toLowerCase();
+    const post = (message) => openidea.postMessage(JSON.stringify(message));
+
+    function recipe(name) {
+      return recipes.find((entry) => same(entry.name, name)) || null;
+    }
+
+    function setBusy(on) {
+      busy = on;
+      query.disabled = on;
+      refresh.disabled = on;
+      if (!on && selected) drawDetail();
+      else if (on) {
+        const button = $("change"),
+          remove = $("remove");
+        if (button) button.disabled = true;
+        if (remove) remove.disabled = true;
+      }
+    }
+
+    function search(text) {
+      lastQuery = text;
+      seq += 1;
+      post({ op: "search", seq, query: text });
+      if (text) status.textContent = "Searching Conan Center…";
+      else status.textContent = project ? `Reading ${project.recipe || "the project"}…` : "Open a folder first.";
+      status.classList.remove("error");
+    }
+
+    function setRecipes(message) {
+      setBusy(false);
+      if (message.error) {
+        recipes = [];
+        status.textContent = message.error;
+        status.classList.add("error");
+        list.innerHTML = "";
+        return;
+      }
+      recipes = Array.isArray(message.recipes) ? message.recipes : [];
+      if (!lastQuery) {
+        // An empty query lists exactly the project's packages.
+        installed = new Map(
+          recipes
+            .filter((entry) => entry.installed)
+            .map((entry) => [String(entry.name).toLowerCase(), String(entry.installed)]),
+        );
+      } else {
+        for (const entry of recipes) {
+          const key = String(entry.name).toLowerCase();
+          if (entry.installed) installed.set(key, String(entry.installed));
+          else installed.delete(key);
+        }
+      }
+      const total = typeof message.total === "number" ? message.total : recipes.length;
+      if (lastQuery) {
+        const suffix = total > recipes.length ? ` (first ${recipes.length} of ${total})` : "";
+        status.textContent = `${total} recipe${total === 1 ? "" : "s"}${suffix}`;
+      } else if (recipes.length) {
+        status.textContent = `${project ? project.name + ": " : ""}${recipes.length} package${recipes.length === 1 ? "" : "s"} in ${project && project.recipe ? project.recipe : "conanfile.txt"}`;
+      } else {
+        status.textContent = `${project ? project.name + ": " : ""}no packages yet — search Conan Center to add one`;
+      }
+      status.classList.remove("error");
+      drawList();
+      if (selected && !recipe(selected)) {
+        selected = null;
+        details = null;
+        detailError = null;
+        drawDetail();
+      } else if (selected) {
+        drawDetail();
+      }
+    }
+
+    function drawList() {
+      if (!recipes.length) {
+        const text = lastQuery ? "No recipes match." : "No packages in the project.";
+        list.innerHTML = `<div class="empty" style="padding: 8px">${esc(text)}</div>`;
+        return;
+      }
+      list.innerHTML = recipes
+        .map((entry) => {
+          const current = installed.get(String(entry.name).toLowerCase());
+          const latest = entry.versions && entry.versions.length ? entry.versions[0] : "";
+          return `<button type="button" class="item${same(entry.name, selected) ? " current" : ""}" data-name="${esc(entry.name)}">
+            <span class="name">${esc(entry.name)}</span>
+            <span class="meta">${entry.versions ? entry.versions.length : 0} version${entry.versions && entry.versions.length === 1 ? "" : "s"} · latest ${esc(latest)}${
+              current ? ` · <span class="badge on">installed ${esc(current)}</span>` : ""
+            }</span>
+          </button>`;
+        })
+        .join("");
+    }
+
+    function isNewer(a, b) {
+      const parts = (value) =>
+        String(value)
+          .split(/[.+-]/)
+          .map((part) => parseInt(part, 10) || 0);
+      const left = parts(a),
+        right = parts(b);
+      for (let i = 0; i < Math.max(left.length, right.length); i += 1) {
+        if (left[i] !== right[i]) return left[i] > right[i];
+      }
+      return false;
+    }
+
+    function buttonLabel(current, version) {
+      if (!current) return `Install ${version}`;
+      if (current === version) return `Reinstall ${version}`;
+      return `${isNewer(version, current) ? "Update to" : "Downgrade to"} ${version}`;
+    }
+
+    function drawDetail() {
+      if (!selected) {
+        detail.innerHTML = project
+          ? `<p class="empty">Pick a package from the list, or search Conan Center.</p>`
+          : `<p class="empty">Open a folder with a conanfile.txt or CMakeLists.txt first.</p>`;
+        return;
+      }
+      const entry = recipe(selected);
+      if (!entry) {
+        detail.innerHTML = `<p class="empty">Pick a package from the list.</p>`;
+        return;
+      }
+      const current = installed.get(String(entry.name).toLowerCase());
+      const latest = entry.versions && entry.versions.length ? entry.versions[0] : "";
+      const version = current || latest;
+      const python = !!project && project.recipe === "conanfile.py";
+      const canChange = !!project && !python;
+      const options = (entry.versions || [])
+        .map(
+          (candidate) =>
+            `<option value="${esc(candidate)}"${candidate === version ? " selected" : ""}>${esc(candidate)}${
+              candidate === current ? " (installed)" : ""
+            }${candidate === latest ? " (latest)" : ""}</option>`,
+        )
+        .join("");
+      const tags = details ? [...(details.licenses || []), ...(details.labels || [])] : [];
+      detail.innerHTML = `
+        <div class="head">
+          <h2>${esc(entry.name)}</h2>
+          <span class="badge${current ? " on" : ""}">${current ? `installed ${esc(current)}` : "not in conanfile.txt"}</span>
+        </div>
+        <p class="desc">${details ? esc(details.description || "Conan Center gives no description for this recipe.") : detailError ? esc(detailError) : "Reading Conan Center…"}</p>
+        ${tags.length ? `<div class="tags">${tags.map((tag) => `<span class="tag">${esc(tag)}</span>`).join("")}</div>` : ""}
+        <div class="row" style="flex-wrap: wrap; margin-top: 8px">
+          <label class="caption" for="version">Version</label>
+          <select id="version" ${busy ? "disabled" : ""}>${options}</select>
+          <button id="change" type="button" ${canChange && !busy ? "" : "disabled"}>${buttonLabel(current, version)}</button>
+          <button id="remove" type="button" class="danger" ${canChange && !busy && current ? "" : "disabled"}>Remove</button>
+          <button id="browse" type="button" class="small">Open on Conan Center</button>
+          ${details && details.homepage ? `<button id="homepage" type="button" class="small">Homepage</button>` : ""}
+        </div>
+        ${python ? `<p class="hint">This project has a conanfile.py: its packages are listed, but edits stay with you.</p>` : ""}
+        ${project && !project.cmakeLists ? `<p class="hint">No CMakeLists.txt: conan install runs, but there is no CMake target to link.</p>` : ""}
+      `;
+      const versionField = $("version");
+      if (versionField) {
+        versionField.addEventListener("change", () => {
+          const change = $("change");
+          if (change) {
+            change.textContent = buttonLabel(current, versionField.value);
+          }
+        });
+      }
+      const change = $("change");
+      if (change) change.addEventListener("click", () => run(false));
+      const remove = $("remove");
+      if (remove) remove.addEventListener("click", () => run(true));
+      const browse = $("browse");
+      if (browse) browse.addEventListener("click", () => post({ op: "open", name: entry.name }));
+      const homepage = $("homepage");
+      if (homepage) homepage.addEventListener("click", () => post({ op: "open-url", url: details.homepage }));
+    }
+
+    function run(remove) {
+      if (!selected || busy) return;
+      const versionField = $("version");
+      const version = versionField ? versionField.value : null;
+      setBusy(true);
+      status.textContent = remove ? `Removing ${selected}…` : `Installing ${selected}/${version}…`;
+      status.classList.remove("error");
+      post(remove ? { op: "remove", name: selected } : { op: "install", name: selected, version });
+    }
+
+    function showResult(message) {
+      logwrap.hidden = false;
+      logtitle.textContent = message.title || "";
+      const problem = message.problem ? `${message.problem}\n\n` : "";
+      log.textContent = `${message.ok ? "" : "Failed: "}${problem}${message.output || ""}`.trim();
+      log.scrollTop = log.scrollHeight;
+      setBusy(false);
+      if (!message.ok) {
+        status.textContent = message.problem || "The change failed.";
+        status.classList.add("error");
+      }
+      search(lastQuery);
+    }
+
+    list.addEventListener("click", (event) => {
+      const button = event.target.closest("button.item");
+      if (!button) return;
+      selected = button.dataset.name;
+      details = null;
+      detailError = null;
+      drawList();
+      drawDetail();
+      post({ op: "details", name: selected });
+    });
+
+    query.addEventListener("input", () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => search(query.value.trim()), 200);
+    });
+    query.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        clearTimeout(timer);
+        search(query.value.trim());
+      }
+    });
+    refresh.addEventListener("click", () => search(query.value.trim()));
+    clear.addEventListener("click", () => {
+      log.textContent = "";
+      logtitle.textContent = "";
+      logwrap.hidden = true;
+    });
+
+    openidea.onMessage((raw) => {
+      let message;
+      try {
+        message = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      if (message.op === "search" && message.seq === seq) {
+        setRecipes(message);
+      } else if (message.op === "details" && same(message.name, selected)) {
+        details = message.error ? null : message;
+        detailError = message.error || null;
+        drawDetail();
+      } else if (message.op === "busy") {
+        setBusy(true);
+        if (message.title) status.textContent = `${message.title}…`;
+      } else if (message.op === "result") {
+        showResult(message);
+      }
+    });
+
+    if (!project) {
+      status.textContent = "Open a folder first.";
+      status.classList.add("error");
+      query.disabled = true;
+      refresh.disabled = true;
+      drawDetail();
+    } else {
+      drawDetail();
+      search("");
+    }
+  })();
+</script>

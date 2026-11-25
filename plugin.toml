@@ -1,0 +1,38 @@
+id = "brunornasc.conan"
+name = "Conan Center"
+version = "0.1.0"
+description = "Search Conan Center recipes and their versions, then install, change or remove them in conanfile.txt: conan install runs, CMakeLists.txt gets the find_package() and target_link_libraries() lines Conan's CMakeDeps names, and CMake is configured with the generated toolchain."
+authors = ["Bruno Rodrigues"]
+license = "Apache-2.0"
+change-notes = "0.1.0 — first release: search Conan Center, versions with descriptions and licences, install/update/remove in conanfile.txt, conan install, CMakeLists.txt edits and CMake configure."
+categories = ["tools"]
+icon = "icon.svg"
+engines.openidea = "^1.3"
+wasm = "dist/plugin.wasm"
+activation = ["on-view:conan", "on-command:*"]
+
+[capabilities]
+required = [
+  "project.read",
+  "project.write",
+  "net:center2.conan.io",
+  "net:center.conan.io",
+  "net:conan.io",
+  "process:conan",
+  "process:cmake",
+]
+
+[[contributes.views]]
+id = "conan"
+title = "Conan"
+icon = "icon.svg"
+location = "bottom"
+
+[[contributes.commands]]
+id = "open"
+title = "Conan: Search Conan Center"
+category = "Conan"
+
+[[contributes.menus]]
+menu = "tools"
+command = "open"
