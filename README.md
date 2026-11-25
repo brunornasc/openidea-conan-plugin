@@ -59,17 +59,14 @@ searching and browsing need neither. Discovery uses
 
 ## Build and test
 
-From the repository root:
-
 ```sh
-plugins/build.sh official/conan
-cargo test --manifest-path plugins/official/conan/Cargo.toml
-cargo run -p ide-host --bin openidea-plugin -- check plugins/official/conan
+openidea-plugin build
+cargo test
+openidea-plugin check
 ```
 
-Install the built package folder through Settings › Plugins › Install from
-Disk. See the [plugin guide](../../README.md) and
-[official/community policy](../../README.md#81-official-and-community-plugins).
+Install the built package folder through Settings › Plugins › *Install Plugin from Disk…*.
+See the [OpenIDEA plugin guide](https://github.com/l0ng-ai/openidea/blob/main/plugins/README.md).
 
 ## Icon
 
